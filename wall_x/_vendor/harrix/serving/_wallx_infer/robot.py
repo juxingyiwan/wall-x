@@ -11,6 +11,8 @@ from wall_x._vendor.harrix.serving._wallx_infer.base_dataclass import (
 from wall_x._vendor.harrix.serving._wallx_infer.socket_controller import RobotController
 
 from wall_x._vendor.harrix.serving._wallx_infer.logger import InferLogger
+from wall_x._vendor.harrix.utils.train_config import resolve_dof_config
+from wall_x.model.core.action.normalizer import zero_virtual_padding
 
 robot_action_key_mapping = {
     "follow_left_ee_cartesian_pos": "follow1_pos[:3]",
@@ -312,10 +314,12 @@ class Robot(ABC):
         return state, views
 
     def _get_dof_mask(self):
-        dof_config = self.config.train_config["dof_config"]
+        dof_config = resolve_dof_config(self.config.train_config)
         total_dof = sum(dof_config.values())
         dof_mask = np.ones((1, self.config.action_horizon, total_dof))
-        return dof_mask
+        # Training masks explicit virtual channels out. Missing real joints
+        # are separate; the flow helper also aligns virtual clean endpoints.
+        return zero_virtual_padding(dof_mask, dof_config)
 
     @staticmethod
     def _try_compose_arm_joint_pos_with_gripper(state: dict, key: str):
@@ -551,11 +555,8 @@ class DesktopRobot(Robot):
         self.logger = InferLogger.get_robot_logger("Robot")
 
     def _get_dof_mask(self):
-        from wall_x._vendor.harrix.utils.train_config import resolve_dof_config
-
         dof_config = resolve_dof_config(self.config.train_config)
-        total_dof = sum(dof_config.values())
-        dof_mask = np.ones((1, self.config.action_horizon, total_dof))
+        dof_mask = super()._get_dof_mask()
 
         # For desktop, mask out head_actions, height, and velocity_decomposed
         mask_keys = ["head_actions", "height", "velocity_decomposed"]
@@ -578,9 +579,16 @@ class DesktopRobotVGA(Robot):
         self.logger = InferLogger.get_robot_logger("Robot")
 
     def _get_dof_mask(self):
-        dof_config = self.config.train_config["data"]["dof_config"]
+        # Preserve the legacy VGA data-nested layout as well as flat/task YAML.
+        train_config = self.config.train_config
+        layout_config = train_config.get("data", {})
+        if "dof_config" not in layout_config:
+            layout_config = train_config
+        dof_config = resolve_dof_config(layout_config)
         total_dof = sum(dof_config.values())
         dof_mask = np.ones((1, self.config.action_horizon, total_dof))
+        # Virtual padding must have mask=0, matching the training collator.
+        dof_mask = zero_virtual_padding(dof_mask, dof_config)
 
         # For desktop, mask out head_actions, height, and velocity_decomposed
         mask_keys = ["head_actions", "height", "velocity_decomposed"]
@@ -608,7 +616,11 @@ class DesktopRobotPreprocessor(DesktopRobot):
 
     def get_observation(self, state, views):
         robot_state_action_data = RobotStateActionData(config=self.config)
-        if "follow1_pos" in state or "follow2_pos" in state:
+        if "joint_state" in state:
+            from .joint_state import ingest_joint_state
+
+            ingest_joint_state(state, self.config, robot_state_action_data)
+        elif "follow1_pos" in state or "follow2_pos" in state:
             ingest_websocket_follow_pos(state, self.config, robot_state_action_data)
         for key in robot_action_key_mapping.keys():
             if key.startswith(("follow_left_", "follow_right_")):

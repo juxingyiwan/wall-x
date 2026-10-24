@@ -1,0 +1,11 @@
+# LIBERO and RoboTwin model environments (Python 3.10).
+# LeRobot 0.4.4 requires huggingface-hub <0.36; Transformers 5.2 requires >=1.0.
+-r common.txt
+transformers==4.57.6
+huggingface-hub==0.35.3
+lerobot==0.4.4
+av==15.1.0
+torchcodec==0.10.0
+setuptools>=71,<81
+numpy==2.2.6
+numba==0.61.2

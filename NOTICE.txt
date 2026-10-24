@@ -1,0 +1,30 @@
+# Third-party source notices
+
+Wall-X is distributed under [Apache-2.0](LICENSE). Existing source headers retain
+their original copyright and license notices.
+
+## RTC regression reference
+
+`tests/fixtures/rtc/lerobot_b9cb121_modeling_rtc.py` is an unchanged copy of
+[LeRobot's RTC processor](https://github.com/huggingface/lerobot/blob/b9cb121cb7d4e3e26ec5c906d08dda68d151ba52/src/lerobot/policies/rtc/modeling_rtc.py),
+copyright 2025 The HuggingFace Inc. team, licensed under Apache-2.0. Its original
+notice is retained in the file; the adjacent SHA256 and regression test verify
+the reference source. It is used only by tests and is not a replacement for the
+installed LeRobot package.
+
+`tests/fixtures/rtc/wallx_5c8ced1_native_flow.py` preserves the earlier Wall-X
+native flow implementation for compatibility tests under the repository license.
+Its sampler function matches the public
+[Wall-X baseline at ce2a1ae](https://github.com/X-Square-Robot/wall-x/blob/ce2a1ae31d9ee1028b97ca40e3f66034cf8c0e5f/wall_x/model/qact/qwen2_5/modeling_qwen2_5_vl_act.py)
+(`_generate_flow_action_vanilla`); the fixture adds standalone imports.
+
+## Optional integrations
+
+LeRobot, LIBERO, RoboTwin, XPolicyLab, SAPIEN, MPLib, cuRobo and robot drivers are
+separate dependencies with their own licenses. Setup scripts refer to their
+upstream sources; this contribution does not bundle their assets or binary
+distributions. The simulator compatibility helper edits the selected installed
+SAPIEN/MPLib sources locally; it does not redistribute those packages.
+
+The independently packaged B601 client includes its own copy of Apache-2.0 and
+[dependency and RTC attribution](deployment/client/NOTICE.txt).

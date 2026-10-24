@@ -62,6 +62,7 @@ class ModelSection:
     architecture: str = "qwen2_5"
     # Inference algorithm. Each adapter validates its supported subset.
     action_mode: str = "flow"
+    padding: str = "zero"  # inference-only virtual-channel policy
 
 
 @dataclass
@@ -164,7 +165,7 @@ def load_eval_config(yaml_path: str) -> EvalConfig:
 
     if not cfg.model.checkpoint_path:
         raise ValueError(f"model.checkpoint_path is required in {yaml_path}")
-    if not os.path.isdir(cfg.model.checkpoint_path):
+    if not os.path.exists(cfg.model.checkpoint_path):
         raise FileNotFoundError(
             f"model.checkpoint_path does not exist: {cfg.model.checkpoint_path}"
         )
@@ -198,9 +199,18 @@ def autofill_from_checkpoint(cfg: EvalConfig) -> EvalConfig:
 
     This resolves ``model.train_config_path`` and ``model.action_horizon``.
     """
+    from wall_x._vendor.harrix.utils.ckpt_load import resolve_checkpoint_dir
+    from wall_x.checkpoint_weights import resolve_checkpoint_weights
+
+    selected = cfg.model.checkpoint_path
+    if not os.path.isfile(selected):
+        selected = resolve_checkpoint_dir(selected)
+    weights = resolve_checkpoint_weights(selected)
+    cfg.model.checkpoint_path = str(weights)
+    checkpoint_dir = str(weights.parent)
     if cfg.model.train_config_path is None:
         for fname in ("config.yml", "config.yaml"):
-            cand = os.path.join(cfg.model.checkpoint_path, fname)
+            cand = os.path.join(checkpoint_dir, fname)
             if os.path.exists(cand):
                 cfg.model.train_config_path = cand
                 break

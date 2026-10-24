@@ -272,16 +272,28 @@ class DistributedTrainer(BaseDistributedTrainer):
         )
 
         for epoch in range(self.start_epoch, self.num_epoch):
+            limit = getattr(self, "num_training_steps", 0)
+            if limit > 0 and self.global_step >= limit:
+                break
+            before = self.global_step
             # Training
             self.train_loop(epoch, profiler=profiler)
             barrier()
             num_training_steps = getattr(self, "num_training_steps", 0)
+            terminal = (
+                num_training_steps > 0 and self.global_step >= num_training_steps
+            ) or epoch + 1 == self.num_epoch
+            interval = self.cfg.logging.epoch_save_interval
+            due = interval > 0 and (epoch + 1) % interval == 0
+            if (
+                self.global_step > before
+                and (terminal or due)
+                and getattr(self, "_last_saved_step", None) != self.global_step
+            ):
+                self.save_checkpoint(epoch, self.global_step)
+                self._last_saved_step = self.global_step
             if num_training_steps > 0 and self.global_step >= num_training_steps:
                 break
-
-            # Save checkpoint
-            if (epoch + 1) % self.cfg.logging.epoch_save_interval == 0:
-                self.save_checkpoint(epoch)
 
             # Validation
             self.val_loop()
@@ -402,7 +414,9 @@ class DistributedTrainer(BaseDistributedTrainer):
 
     def true_gather(self, value):
         """Gather values across all processes and compute mean over non-None values."""
-        device = next(self.model.parameters()).device
+        # NCCL reductions require CUDA tensors even when FSDP CPU offload
+        # keeps sharded model parameters on CPU between forward calls.
+        device = self.device
 
         # CRITICAL: must clone() here, not just detach().
         # detach() only disconnects the computation graph but still shares the
@@ -413,7 +427,7 @@ class DistributedTrainer(BaseDistributedTrainer):
         # in-place all_reduce silently mutates the original, causing downstream
         # readers (like training_log) to see a value multiplied by world_size.
         value_to_gather = (
-            value.detach().clone()
+            value.detach().clone().to(device)
             if value is not None
             else torch.tensor(0.0, device=device)
         )

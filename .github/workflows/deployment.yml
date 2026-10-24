@@ -1,0 +1,41 @@
+name: B601 deployment adapter
+
+on: [push, pull_request]
+
+jobs:
+  client-and-entry:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install adapter test dependencies
+        run: python -m pip install 'setuptools>=68' -e 'deployment/client[dev,vision]'
+      - name: Check documentation and public templates
+        run: |
+          python scripts/check_docs.py
+          python scripts/check_robotwin_docs.py
+      - name: Check installed LIBERO launcher
+        run: python -m pytest tests/test_installed_scripts.py -q
+      - name: Check unified entry
+        run: |
+          python -m ruff check --config deployment/pyproject.toml deployment/cli.py deployment/local_runtime.py deployment/local_policy.py deployment/tests deployment/environment/*.py deployment/validation
+          python -m ruff format --check --config deployment/pyproject.toml deployment/cli.py deployment/local_runtime.py deployment/local_policy.py deployment/tests deployment/environment/*.py deployment/validation
+          python -m pytest -c deployment/pyproject.toml deployment/tests -q
+      - name: Check robot client
+        working-directory: deployment/client
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+          python -m pytest -q
+      - name: Check client distributions and installed wheel
+        run: |
+          python -m build --sdist --wheel --outdir "$RUNNER_TEMP/wheels" deployment/client
+          python scripts/check_client_distribution.py "$RUNNER_TEMP/wheels"
+          python -m pip install --no-deps --target "$RUNNER_TEMP/client-wheel" "$RUNNER_TEMP/wheels"/*.whl
+          cd "$RUNNER_TEMP"
+          PYTHONPATH="$RUNNER_TEMP/client-wheel" python -c 'from pathlib import Path; import os, sys, wallx_client; from wallx_client.cli import main; assert Path(wallx_client.__file__).is_relative_to(Path(os.environ["RUNNER_TEMP"]) / "client-wheel"); assert main(["config"]) == 0; assert main(["doctor"]) == 0; assert not ({"torch", "motorbridge", "can", "lerobot_robot_seeed_b601"} & sys.modules.keys())'

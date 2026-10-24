@@ -1,296 +1,113 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# LIBERO evaluation launcher. Configure with environment variables:
-#
-#   CHECKPOINT_PATH=/path/to/checkpoint bash scripts/run_libero.sh
-#   bash scripts/run_libero.sh /path/to/checkpoint
-#   CHECKPOINT_PATH=/path/to/checkpoint SMOKE=1 bash scripts/run_libero.sh
-#   CONFIG=/path/to/eval.yaml bash scripts/run_libero.sh
-#
-# Optional knobs:
-#   LIBERO_PATH=/path/to/LIBERO     # optional when not cloned to third_party/LIBERO
-#   CUDA_ID=0
-#   DRIVER_MODE=in_process
-#   NUM_WORKERS=1
-#   MAX_BATCH_SIZE=1
-#   ALL_SUITES=1                    # run all standard LIBERO suites (40 tasks)
-#   TASK_SUITES="libero_spatial ..." # custom suite list (space- or comma-separated)
-#   TASK_SUITE_NAME=libero_spatial  # single suite when ALL_SUITES=0 and TASK_SUITES unset
-#   NUM_TRIALS_PER_TASK=50
-#   TASK_INDICES=0,1,2              # omit to run every task in the suite
-#   MAX_INFER_TIMES=52
-#   NORM_KEY=libero_all
-#   ROLLOUT_BASE=/path/to/rollout   # per-suite logs under ${ROLLOUT_BASE}/${suite}/
-#   LOG_DIR=/tmp/harrix_libero_eval   # overrides ROLLOUT_BASE when set (single suite)
-#   SKIP_LIBERO_DEP_CHECK=1         # bypass dependency preflight
-
-# export ALL_SUITES=1
-# export TASK_SUITE_NAME=libero_10
-# export CUDA_ID=0
-# export NUM_WORKERS=10
-# export NUM_TRIALS_PER_TASK=20
-# export CHECKPOINT_PATH=/path/to/checkpoint
-# export ROLLOUT_BASE=/path/to/rollout
-
+# CLI reference: scripts/README.md. End-to-end workflow: docs/libero.md.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 
 usage() {
     cat <<'EOF'
-Usage: bash scripts/run_libero.sh [CHECKPOINT_PATH]
-
-Environment:
-  CHECKPOINT_PATH=/path/to/checkpoint
-  CONFIG=/path/to/eval.yaml
-  LIBERO_PATH=/path/to/LIBERO
-  CUDA_ID=0
-  SMOKE=1
+Usage: run_libero.sh [CHECKPOINT_PATH]
+Provide CHECKPOINT_PATH or CONFIG=/path/to/eval.yaml.
+Optional: WALLX_LIBERO_ROOT (legacy alias LIBERO_PATH), CUDA_ID, MUJOCO_GL,
+ALL_SUITES=1, TASK_SUITES, TASK_SUITE_NAME, NUM_TRIALS_PER_TASK, NUM_WORKERS,
+NORM_KEY, LOG_DIR, ROLLOUT_BASE, SMOKE=1, PRINT_CONFIG=1.
+Explicit environment options override YAML; omitted options retain YAML values.
 EOF
 }
-
-if [[ -d "${SOURCE_ROOT}/third_party/LIBERO" ]]; then
-    export PYTHONPATH="${SOURCE_ROOT}/third_party/LIBERO:${PYTHONPATH:-}"
-fi
-if [[ -n "${LIBERO_PATH:-}" ]]; then
-    export PYTHONPATH="${LIBERO_PATH}:${PYTHONPATH:-}"
-fi
-
-if [[ -f "${SCRIPT_DIR}/infer_libero.py" ]]; then
-    INFER_LIBERO_CMD=("${SCRIPT_DIR}/infer_libero.py")
-elif [[ -f "${SOURCE_ROOT}/scripts/infer_libero.py" ]]; then
-    INFER_LIBERO_CMD=(python "${SOURCE_ROOT}/scripts/infer_libero.py")
-elif command -v infer_libero.py >/dev/null 2>&1; then
-    INFER_LIBERO_CMD=(infer_libero.py)
-else
-    echo "infer_libero.py is not available. Install Wall-X first." >&2
-    exit 2
-fi
-
-DEFAULT_ALL_SUITES=(
-    libero_spatial
-    libero_object
-    libero_goal
-    libero_10
-)
-
-case "${1:-}" in
-    -h|--help)
-        usage
-        exit 0
-        ;;
-esac
-
-if [[ $# -gt 1 ]]; then
+case "${1:-}" in -h|--help) usage; exit 0 ;; esac
+if [[ $# -gt 1 ]]; then usage >&2; exit 2; fi
+if [[ $# -eq 1 ]]; then CHECKPOINT_PATH="$1"; fi
+if [[ -z "${CHECKPOINT_PATH:-}" && -z "${CONFIG:-}" ]]; then
     usage >&2
     exit 2
 fi
-if [[ $# -eq 1 ]]; then
-    CHECKPOINT_PATH="$1"
-fi
 
-CUDA_IDS="${CUDA_ID:-0}"
-export CUDA_VISIBLE_DEVICES="${CUDA_IDS}"
-
-# MuJoCo offscreen rendering via NVIDIA EGL (required on headless GPU nodes).
-export MUJOCO_GL=egl
-export PYOPENGL_PLATFORM=egl
-# LIBERO init-state files are trusted simulator assets. PyTorch 2.6 changed
-# torch.load() defaults in a way that breaks LIBERO's upstream loader.
-export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD="${TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD:-1}"
-EGL_VENDOR_DIR="${HOME}/.config/glvnd/egl_vendor.d"
-EGL_VENDOR_FILE="${EGL_VENDOR_DIR}/10_nvidia.json"
-if [[ ! -f "${EGL_VENDOR_FILE}" ]]; then
-    mkdir -p "${EGL_VENDOR_DIR}"
-    cat > "${EGL_VENDOR_FILE}" <<'EOF'
-{
-    "file_format_version" : "1.0.0",
-    "ICD" : {
-        "library_path" : "libEGL_nvidia.so.0"
-    }
-}
-EOF
-fi
-export __EGL_VENDOR_LIBRARY_FILENAMES="${EGL_VENDOR_FILE}"
-export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:${LD_LIBRARY_PATH:-}"
-
-# robosuite validates this value against CUDA_VISIBLE_DEVICES on common
-# headless EGL stacks, so default to the first requested physical GPU id.
-FIRST_CUDA_ID="${CUDA_IDS%%,*}"
-export MUJOCO_EGL_DEVICE_ID="${MUJOCO_EGL_DEVICE_ID:-${FIRST_CUDA_ID:-0}}"
-if [[ -d "${SOURCE_ROOT}/third_party/harrix/python" ]]; then
-    export PYTHONPATH="${SOURCE_ROOT}/third_party/harrix/python:${PYTHONPATH:-}"
+if [[ ${CUDA_ID+x} ]]; then
+    export CUDA_VISIBLE_DEVICES="${CUDA_ID}"
+elif [[ ! ${CUDA_VISIBLE_DEVICES+x} ]]; then
+    export CUDA_VISIBLE_DEVICES=0
 fi
 if [[ -d "${SOURCE_ROOT}/wall_x" ]]; then
-    export PYTHONPATH="${SOURCE_ROOT}:${PYTHONPATH:-}"
+    export PYTHONPATH="${SOURCE_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 fi
+source "${SCRIPT_DIR}/libero_rendering.sh"
 
-check_libero_dependencies() {
-    local missing
-    if missing="$(
-        python - <<'PY'
+if [[ "${SKIP_LIBERO_DEP_CHECK:-0}" != 1 && "${PRINT_CONFIG:-0}" != 1 ]]; then
+    "${PYTHON_BIN}" - <<'PY'
 import importlib.util
 
-checks = [
-    ("libero.libero", "LIBERO"),
-    ("robosuite", "robosuite"),
-    ("mujoco", "mujoco"),
-    ("OpenGL", "PyOpenGL"),
-    ("bddl", "bddl"),
-    ("gym", "gym"),
-    ("h5py", "h5py"),
-]
-
-missing = [label for module, label in checks if importlib.util.find_spec(module) is None]
+missing = []
+for module in ("libero.libero", "robosuite", "mujoco", "OpenGL", "bddl", "gym", "h5py"):
+    try:
+        present = importlib.util.find_spec(module) is not None
+    except ModuleNotFoundError:
+        present = False
+    if not present:
+        missing.append(module)
 if missing:
-    print(", ".join(missing))
-    raise SystemExit(1)
+    raise SystemExit("Missing LIBERO dependencies: " + ", ".join(missing) + ". See docs/libero.md#assets.")
 PY
-    )"; then
-        return 0
-    fi
-
-    cat >&2 <<EOF
-LIBERO simulator dependencies are missing: ${missing}
-
-Install the optional LIBERO simulator stack from the Wall-X repository root:
-
-  pip install -r requirements-libero.txt
-  mkdir -p third_party
-  git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git third_party/LIBERO
-
-If LIBERO is cloned elsewhere, pass it with:
-
-  LIBERO_PATH=/path/to/LIBERO bash scripts/run_libero.sh ...
-
-Set SKIP_LIBERO_DEP_CHECK=1 only if you intentionally manage these dependencies elsewhere.
-EOF
-    exit 2
-}
-
-if [[ "${SKIP_LIBERO_DEP_CHECK:-0}" != "1" ]]; then
-    check_libero_dependencies
 fi
 
-resolve_task_suites() {
-    local suites=()
-    if [[ "${ALL_SUITES:-0}" == "1" ]]; then
-        if [[ -n "${TASK_SUITES:-}" ]]; then
-            TASK_SUITES="${TASK_SUITES//,/ }"
-            read -r -a suites <<< "${TASK_SUITES}"
-        else
-            suites=("${DEFAULT_ALL_SUITES[@]}")
-        fi
-    elif [[ -n "${TASK_SUITES:-}" ]]; then
-        TASK_SUITES="${TASK_SUITES//,/ }"
-        read -r -a suites <<< "${TASK_SUITES}"
-    else
-        suites=("${TASK_SUITE_NAME:-libero_spatial}")
+base_args=()
+if [[ -n "${CONFIG:-}" ]]; then base_args+=(--config "${CONFIG}"); fi
+if [[ -n "${CHECKPOINT_PATH:-}" ]]; then base_args+=(--checkpoint-path "${CHECKPOINT_PATH}"); fi
+for pair in \
+    TRAIN_CONFIG_PATH:train-config-path NORM_KEY:norm-key ARCHITECTURE:architecture \
+    ACTION_MODE:action-mode ACTION_HORIZON:action-horizon SEED:seed \
+    INITIAL_STATES_PATH:initial-states-path NUM_TRIALS_PER_TASK:num-trials-per-task \
+    TASK_INDICES:task-indices MAX_INFER_TIMES:max-infer-times NUM_WORKERS:num-workers \
+    MAX_BATCH_SIZE:max-batch-size WS_PORT:ws-port DRIVER_MODE:driver-mode; do
+    var="${pair%%:*}"
+    if [[ ${!var+x} ]]; then base_args+=("--${pair#*:}" "${!var}"); fi
+done
+if [[ "${SMOKE:-0}" == 1 ]]; then base_args+=(--smoke); fi
+if [[ ${DET+x} ]]; then
+    if [[ "${DET}" == 1 ]]; then base_args+=(--deterministic-model); else base_args+=(--no-deterministic-model); fi
+fi
+if [[ ${SKIP_INTERMEDIATE_RENDER+x} ]]; then
+    if [[ "${SKIP_INTERMEDIATE_RENDER}" == 1 ]]; then base_args+=(--skip-intermediate-render); else base_args+=(--no-skip-intermediate-render); fi
+fi
+
+# Read YAML defaults through the same merger used by the actual inference entry.
+merged="$("${PYTHON_BIN}" "${SCRIPT_DIR}/infer_libero.py" "${base_args[@]}" --print-config)"
+defaults="$(printf '%s' "${merged}" | "${PYTHON_BIN}" -c 'import sys,yaml; c=yaml.safe_load(sys.stdin); print(c["env"]["libero"]["task_suite_name"]); print(c["runtime"]["log_dir"])')"
+mapfile -t default_values <<< "${defaults}"
+suites=("${TASK_SUITE_NAME:-${default_values[0]}}")
+explicit_suite=0
+if [[ "${ALL_SUITES:-0}" == 1 ]]; then
+    suites=(libero_spatial libero_object libero_goal libero_10)
+    explicit_suite=1
+fi
+if [[ -n "${TASK_SUITES:-}" ]]; then
+    read -r -a suites <<< "${TASK_SUITES//,/ }"
+    explicit_suite=1
+fi
+if [[ ${TASK_SUITE_NAME+x} ]]; then explicit_suite=1; fi
+rollout_override="${WALLX_ROLLOUT_DIR:-}"
+for suite in "${suites[@]}"; do
+    args=("${base_args[@]}")
+    if [[ "${explicit_suite}" == 1 ]]; then args+=(--task-suite-name "${suite}"); fi
+    log_dir="${LOG_DIR:-${ROLLOUT_BASE:+${ROLLOUT_BASE}/json}}"
+    log_dir="${log_dir:-${default_values[1]}}"
+    rollout_dir="${rollout_override:-${ROLLOUT_BASE:+${ROLLOUT_BASE}/videos}}"
+    if [[ ${#suites[@]} -gt 1 ]]; then
+        log_dir="${log_dir}/${suite}"
+        if [[ -n "${rollout_dir}" ]]; then rollout_dir="${rollout_dir}/${suite}"; fi
     fi
-    echo "${suites[@]}"
-}
-
-resolve_log_dirs() {
-    local suite="$1"
-    local multi_suite="$2"
-    local log_dir rollout_dir
-
-    if [[ -n "${LOG_DIR:-}" ]]; then
-        if [[ "${multi_suite}" == "1" ]]; then
-            log_dir="${LOG_DIR}/${suite}"
-        else
-            log_dir="${LOG_DIR}"
-        fi
-    elif [[ -n "${ROLLOUT_BASE:-}" ]]; then
-        if [[ "${multi_suite}" == "1" ]]; then
-            log_dir="${ROLLOUT_BASE}/${suite}/json"
-        else
-            log_dir="${ROLLOUT_BASE}/json"
-        fi
-    else
-        log_dir="/tmp/harrix_libero_eval"
-    fi
-
-    if [[ -n "${WALLX_ROLLOUT_DIR:-}" ]]; then
-        if [[ "${multi_suite}" == "1" ]]; then
-            rollout_dir="${WALLX_ROLLOUT_DIR}/${suite}"
-        else
-            rollout_dir="${WALLX_ROLLOUT_DIR}"
-        fi
-    elif [[ -n "${ROLLOUT_BASE:-}" ]]; then
-        if [[ "${multi_suite}" == "1" ]]; then
-            rollout_dir="${ROLLOUT_BASE}/${suite}/videos"
-        else
-            rollout_dir="${ROLLOUT_BASE}/videos"
-        fi
-    else
-        rollout_dir=""
-    fi
-
-    mkdir -p "${log_dir}"
+    args+=(--log-dir "${log_dir}")
     if [[ -n "${rollout_dir}" ]]; then
+        export WALLX_ROLLOUT_DIR="${rollout_dir}"
         mkdir -p "${rollout_dir}"
     fi
-    LOG_DIR_RESOLVED="${log_dir}"
-    WALLX_ROLLOUT_DIR_RESOLVED="${rollout_dir}"
-}
-
-run_suite() {
-    local suite="$1"
-    local multi_suite="$2"
-
-    resolve_log_dirs "${suite}" "${multi_suite}"
-    if [[ -n "${WALLX_ROLLOUT_DIR_RESOLVED}" ]]; then
-        export WALLX_ROLLOUT_DIR="${WALLX_ROLLOUT_DIR_RESOLVED}"
+    if [[ "${PRINT_CONFIG:-0}" == 1 ]]; then
+        printf '%s\n' '---'
+        "${PYTHON_BIN}" "${SCRIPT_DIR}/infer_libero.py" "${args[@]}" --print-config
     else
-        unset WALLX_ROLLOUT_DIR
+        mkdir -p "${log_dir}"
+        echo "=== LIBERO eval: suite=${suite} log_dir=${log_dir} ==="
+        PYTHONUNBUFFERED=1 "${PYTHON_BIN}" "${SCRIPT_DIR}/infer_libero.py" "${args[@]}" 2>&1 | tee -a "${log_dir}/console.log"
     fi
-
-    local args=()
-    if [[ -n "${CONFIG:-}" ]]; then
-        args+=(--config "${CONFIG}")
-    else
-        if [[ -z "${CHECKPOINT_PATH:-}" ]]; then
-            echo "CHECKPOINT_PATH is required when CONFIG is not set." >&2
-            exit 2
-        fi
-        args+=(--checkpoint-path "${CHECKPOINT_PATH}")
-    fi
-
-    if [[ -n "${TRAIN_CONFIG_PATH:-}" ]]; then
-        args+=(--train-config-path "${TRAIN_CONFIG_PATH}")
-    fi
-    if [[ "${SMOKE:-0}" == "1" ]]; then
-        args+=(--smoke)
-    fi
-    if [[ "${DET:-0}" == "1" ]]; then
-        args+=(--deterministic-model)
-    fi
-    if [[ -n "${TASK_INDICES:-}" ]]; then
-        args+=(--task-indices "${TASK_INDICES}")
-    fi
-    if [[ -n "${MAX_INFER_TIMES:-}" ]]; then
-        args+=(--max-infer-times "${MAX_INFER_TIMES}")
-    fi
-
-    args+=(--driver-mode "${DRIVER_MODE:-in_process}")
-    args+=(--num-workers "${NUM_WORKERS:-1}")
-    args+=(--max-batch-size "${MAX_BATCH_SIZE:-1}")
-    args+=(--task-suite-name "${suite}")
-    args+=(--num-trials-per-task "${NUM_TRIALS_PER_TASK:-50}")
-    args+=(--norm-key "${NORM_KEY:-libero_all}")
-    args+=(--log-dir "${LOG_DIR_RESOLVED}")
-
-    echo "=== LIBERO eval: suite=${suite} log_dir=${LOG_DIR_RESOLVED} ==="
-    "${INFER_LIBERO_CMD[@]}" "${args[@]}"
-}
-
-suites=($(resolve_task_suites))
-multi_suite=0
-if [[ "${#suites[@]}" -gt 1 ]]; then
-    multi_suite=1
-fi
-
-for suite in "${suites[@]}"; do
-    run_suite "${suite}" "${multi_suite}"
 done

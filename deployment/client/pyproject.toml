@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wallx-rebot-client"
+version = "0.2.0"
+description = "A supervised B601 client for the Wall-X joint_state_v1 protocol"
+readme = {text = "Wall-X B601 client. Run wallx-client --help, config or doctor after installation. Complete installation, training and deployment instructions are in docs/rebot.md and docs/rebot.zh-CN.md in the source repository. / Wall-X B601 客户端：安装后运行 wallx-client --help、config 或 doctor；完整安装、训练与部署说明见源码仓库的 docs/rebot.md 和 docs/rebot.zh-CN.md。", content-type = "text/plain"}
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE.txt"]
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26,<3",
+  "PyYAML>=6,<7",
+  "msgpack>=1.0,<2",
+  "websockets>=15.0.1,<16",
+  "rerun-sdk>=0.26.2,<0.27",
+  "python-xlib>=0.33,<1; sys_platform == 'linux'",
+]
+
+[project.optional-dependencies]
+vision = ["opencv-python-headless>=4.8,<5"]
+hardware = [
+  "lerobot==0.4.4",
+  "lerobot-robot-seeed-b601==1.0.4",
+  "motorbridge==0.5.3",
+  "python-can>=4.6,<5",
+]
+dev = ["pytest>=8,<10", "ruff>=0.11,<1", "msgpack-numpy==0.4.8", "build>=1,<2"]
+
+[project.scripts]
+wallx-client = "wallx_client.cli:main"
+
+[tool.setuptools.package-data]
+wallx_client = ["configs/*.yml"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["build", "dist", ".envs", "vendor", ".venv-py312-backup*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

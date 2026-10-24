@@ -1,0 +1,41 @@
+{
+  "upstream_commit": "ce2a1ae31d9ee1028b97ca40e3f66034cf8c0e5f",
+  "documents": {
+    ".github/ISSUE_TEMPLATE/bug_report.md": {
+      "upstream_path": ".github/ISSUE_TEMPLATE/bug_report.md",
+      "sha256": "e9f66a04cbee0807512c177cd157964ef2f2a343a79b8e960f2b273ac22e97f8"
+    },
+    "README.upstream.md": {
+      "upstream_path": "README.md",
+      "sha256": "41ed3bd50524bbd0d46f40d38aba7b472cde8bb57b93bd40661aa294d9ad078e"
+    },
+    "README.upstream.zh-CN.md": {
+      "upstream_path": "README.zh-CN.md",
+      "sha256": "11bf0b5629f43cb3883723d21ec5afe9f2e228451b358de1faeb3905967c5552"
+    },
+    "scripts/README.md": {
+      "upstream_path": "scripts/README.md",
+      "sha256": "ccfc0d19e8281c8123548ff010e6e51c8a373341202060298c16e886b2db6411"
+    },
+    "workspace/README.md": {
+      "upstream_path": "workspace/README.md",
+      "sha256": "f4195ffc0d521d493fda4680a6076ba8bf2e47a4352380bdbae49beeddfaa07c"
+    },
+    "workspace/TRAIN_ARRANGE_3_FLOWERS.md": {
+      "upstream_path": "workspace/TRAIN_ARRANGE_3_FLOWERS.md",
+      "sha256": "ccd38f2024a6c23f9131a653170c9d5e9d919eb94c369a8a5edd8bc9331e7a44"
+    },
+    "workspace/rtx5090/DEPLOY.md": {
+      "upstream_path": "workspace/rtx5090/DEPLOY.md",
+      "sha256": "8a138b5866ca54bc9fc54416e56911066d8fb62bce6826e426d62b6fdc2da142"
+    },
+    "workspace/rtx5090/README.md": {
+      "upstream_path": "workspace/rtx5090/README.md",
+      "sha256": "4f2084bc6806124bb9e64d3185a75596d5c9191f8d53425ddfe9ae3da10aff94"
+    },
+    "workspace/rtx5090/local/NOTES.md": {
+      "upstream_path": "workspace/rtx5090/local/NOTES.md",
+      "sha256": "67b1e547237b4fe6ef7b6c53aa3b24d8f14886052a87d8bc11c4e2a5a13c619d"
+    }
+  }
+}

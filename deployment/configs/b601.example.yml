@@ -1,0 +1,28 @@
+# Inference virtual padding: zero (default correction) or original (upstream).
+padding: zero
+# TEMPLATE only; existing deployments use deployment/local/profile.yml.
+# client_config is resolved relative to THIS profile, not the working directory.
+# Replace checkpoint identity, digest and normalization key before deployment.
+schema_version: 1
+model:
+  checkpoint_id: example_experiment/12_16000
+  checkpoint_sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+  epoch: 12
+  step: 16000
+  norm_key: example_dataset
+  horizon: 32
+  action_dims:
+  - 6
+  - 1
+  - 19
+  camera_names:
+  - front_view
+  - side_view
+  image_passing_mode: base64
+client_config: client.yml
+server:
+  host: 127.0.0.1
+  port: 32195
+  env: X2ROBOT
+  robot_type: desktop
+  device: cuda

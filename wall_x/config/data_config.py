@@ -50,6 +50,7 @@ class LeRobotDataConfig(DataConfig):
     norm_stats_path: Optional[str] = None
     priority_order: Optional[Dict[str, float]] = None
     camera_name_mapping: Optional[Dict[str, str]] = None
+    task_sampling: Optional[str] = None
     num_workers: int = 4
     action_tokenizer_path: Optional[str] = None
     use_fast_tokenizer: bool = False

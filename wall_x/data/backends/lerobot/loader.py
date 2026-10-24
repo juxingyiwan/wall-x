@@ -2,6 +2,7 @@
 LeRobot Dataset Loader - Distributed Version
 """
 
+import copy
 import logging
 import os
 from typing import Protocol, SupportsIndex, TypeVar
@@ -20,6 +21,11 @@ from wall_x._vendor.x2robot_utils.geometry import (
     so3_to_matrix_batch_nb,
 )
 from wall_x.data.backends.lerobot.config import LerobotConfig
+from wall_x.data.backends.lerobot.episode_split import (
+    episode_split,
+    split_mode,
+    validate_stats_split,
+)
 from wall_x.data.backends.lerobot.rotation_layout import (
     LAYOUT_SKIP_KEYS,
     maybe_convert_euler_to_6d,
@@ -100,18 +106,23 @@ class PreprocessedDataset(Dataset[T_co]):
         rank=0,
         world_size=1,
         test_only=False,
+        val_dataset=None,
     ):
         self.hf_dataset = dataset
 
         if test_only:
             self._dataset = dataset
-        else:
-            self._dataset = None
+        elif split_mode(lerobot_config) == "legacy_frame":
             self.train_dataset, self.val_dataset = random_split(
                 dataset,
                 [0.95, 0.05],
                 torch.Generator().manual_seed(seed) if seed is not None else None,
             )
+            self._train()
+        else:
+            if val_dataset is None:
+                raise ValueError("Pass the held-out episode dataset as val_dataset")
+            self.train_dataset, self.val_dataset = dataset, val_dataset
             self._train()
 
         self.seed = seed
@@ -269,9 +280,7 @@ class PreprocessedDataset(Dataset[T_co]):
             if k not in RELATIVE_SKIP_KEYS
         )
         action_active = sum(
-            int(d)
-            for k, d in self._dof_config.items()
-            if k not in RELATIVE_SKIP_KEYS
+            int(d) for k, d in self._dof_config.items() if k not in RELATIVE_SKIP_KEYS
         )
         if state_active and agent_pos.shape[-1] > state_active:
             agent_pos = agent_pos[..., :state_active]
@@ -318,6 +327,11 @@ class PreprocessedDataset(Dataset[T_co]):
     def __len__(self) -> int:
         return len(self._dataset)
 
+    def _split_view(self, dataset):
+        view = copy.copy(self)
+        view._dataset = dataset
+        return view
+
     def _eval(self):
         self._dataset = self.val_dataset
 
@@ -333,23 +347,45 @@ class PreprocessedDataset(Dataset[T_co]):
             world_size: Total number of processes
             seed: Random seed for reproducibility
         """
-        self._train()
+        view = self._split_view(self.train_dataset)
 
         batch_size = self.config.get("batch_size_per_gpu", 8)
         num_workers = self.config.get("num_workers", 4)
 
-        # Create distributed sampler
-        sampler = DistributedSampler(
-            self,
-            num_replicas=self.world_size,
-            rank=self.rank,
-            shuffle=True,
-            seed=self.seed,
-            drop_last=True,  # Ensure all processes have same number of batches
-        )
+        # Optional task balancing; use the training subset only.
+        task_sampling = self.dataload_config.get("task_sampling")
+        if task_sampling == "sqrt":
+            from wall_x.data.sampling import (
+                DistributedSquareRootSampler,
+                lerobot_train_task_ids,
+            )
+
+            sampler = DistributedSquareRootSampler(
+                lerobot_train_task_ids(self.train_dataset),
+                num_replicas=self.world_size,
+                rank=self.rank,
+                seed=self.seed,
+            )
+            if self.rank == 0:
+                logger.info(
+                    "Square-root task sampling: counts=%s probabilities=%s",
+                    dict(sampler.counts),
+                    sampler.probabilities,
+                )
+        elif task_sampling is None:
+            sampler = DistributedSampler(
+                view,
+                num_replicas=self.world_size,
+                rank=self.rank,
+                shuffle=True,
+                seed=self.seed,
+                drop_last=True,  # Ensure all processes have same number of batches
+            )
+        else:
+            raise ValueError(f"Unsupported data.task_sampling: {task_sampling!r}")
 
         dataloader = torch.utils.data.DataLoader(
-            self,
+            view,
             batch_size=batch_size,
             sampler=sampler,  # Use distributed sampler instead of shuffle=True
             num_workers=num_workers,
@@ -368,7 +404,9 @@ class PreprocessedDataset(Dataset[T_co]):
         """
         Get distributed evaluation dataloader (no shuffling for consistent evaluation)
         """
-        self._eval()
+        if not len(self.val_dataset):
+            return None, None
+        view = self._split_view(self.val_dataset)
 
         batch_size = self.config.get(
             "eval_batch_size_per_gpu", self.config.get("batch_size_per_gpu", 8)
@@ -377,7 +415,7 @@ class PreprocessedDataset(Dataset[T_co]):
 
         # Create distributed sampler for evaluation (no shuffle)
         sampler = DistributedSampler(
-            self,
+            view,
             num_replicas=self.world_size,
             rank=self.rank,
             shuffle=False,  # No shuffling for evaluation
@@ -385,7 +423,7 @@ class PreprocessedDataset(Dataset[T_co]):
         )
 
         dataloader = torch.utils.data.DataLoader(
-            self,
+            view,
             batch_size=batch_size,
             sampler=sampler,
             num_workers=num_workers,
@@ -754,38 +792,27 @@ def load_lerobot_data(
     }
     batch_size = config.get("batch_size_per_gpu", 8)
 
-    # Optional episode subset. YAML ``lerobot_config.episodes`` has always
-    # been present in examples but previously ignored; honour it so smoke
-    # tests / small-dataset runs don't pay the O(N) LeRobotDataset indexing
-    # cost on a multi-thousand-episode repo (~10s / episode on some formats).
-    episodes_override = lerobot_config.get("episodes")
-    if episodes_override is not None:
-        episodes = list(episodes_override)
-        episodes_num_effective = len(episodes)
+    manifest = episode_split(
+        episodes_num, lerobot_config, dataload_config.get("train_test_split", 0.95)
+    )
+    train_episodes = manifest["train_episodes"]
+    test_episodes = manifest["val_episodes"]
+    mode = split_mode(lerobot_config)
+    if mode == "episode":
+        validate_stats_split(norm_stats_path, manifest)
     else:
-        episodes = np.arange(episodes_num).tolist()
-        episodes_num_effective = episodes_num
-
-    train_test_split = dataload_config.get("train_test_split", 0.95)
-    split_idx = int(episodes_num_effective * train_test_split)
-    # Guard: tiny episode subsets + high train_test_split can floor split_idx
-    # to 0 (e.g. 1 ep * 0.95 = 0), which would silently hand LeRobotDataset an
-    # empty episode list and end training after 0 iterations. Fail loud.
-    if split_idx < 1:
-        raise ValueError(
-            f"train_test_split={train_test_split} applied to "
-            f"{episodes_num_effective} episode(s) yields 0 train episodes. "
-            f"Use more episodes or a lower train_test_split."
+        logger.warning(
+            "legacy_frame split reproduces old runs and shares episodes between train/validation"
         )
-    train_episodes = episodes[:split_idx]
-    test_episodes = episodes[split_idx:]
 
-    global_rank = torch.distributed.get_rank()
-    local_rank = int(os.environ["LOCAL_RANK"])
-    local_world_size = int(os.environ["LOCAL_WORLD_SIZE"])
+    distributed = torch.distributed.is_initialized()
+    global_rank = torch.distributed.get_rank() if distributed else rank
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    local_world_size = int(os.environ.get("LOCAL_WORLD_SIZE", 1)) if distributed else 1
     # TODO: Some LeRobot formats need to load all metadata before splitting
     # episodes; loading from all ranks at once can exhaust memory.
     train_dataset = None
+    val_dataset = []
 
     # Sequential loading inside each node
     for r in range(local_world_size):
@@ -804,6 +831,15 @@ def load_lerobot_data(
                 video_backend="pyav",
             )
 
+            if mode == "episode" and test_episodes:
+                val_dataset = LeRobotDataset(
+                    repo_id=repo_id,
+                    root=root,
+                    episodes=test_episodes,
+                    delta_timestamps=delta_timestamps,
+                    video_backend="pyav",
+                )
+
             logger.info(
                 "[Global rank %s] Finished loading on local_rank=%s",
                 global_rank,
@@ -811,7 +847,8 @@ def load_lerobot_data(
             )
 
         # Barrier only within the node
-        torch.distributed.barrier(device_ids=[local_rank])
+        if distributed:
+            torch.distributed.barrier(device_ids=[local_rank])
 
     if rank == 0:
         logger.info("Selected train episodes: %s", train_dataset.episodes)
@@ -828,6 +865,7 @@ def load_lerobot_data(
         seed=seed,
         rank=rank,
         world_size=world_size,
+        val_dataset=val_dataset,
     )
 
     # Calculate samples per process

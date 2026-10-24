@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.whl binary
+# A patch contains meaningful trailing context-line spaces.
+*.patch whitespace=-blank-at-eol

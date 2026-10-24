@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
+from wall_x.utils.validation import is_builtin_int
+
 from .registry import register_optimizer_config, register_scheduler_config
 
 
@@ -109,11 +111,16 @@ class StepSchedulerConfig(SchedulerConfig):
 @dataclass
 class TrainHyperParams:
     num_epoch: int = 1
+    max_optimizer_steps: int = 0  # Independent of the LR schedule horizon.
     batch_size_per_gpu: int = 1
     gradient_accumulation_steps: int = 1
     seed: int = 42
     optimizer: OptimizerConfig = field(default_factory=AdamWConfig)
     scheduler: SchedulerConfig = field(default_factory=CosineSchedulerConfig)
+
+    def __post_init__(self):
+        if not is_builtin_int(self.max_optimizer_steps) or self.max_optimizer_steps < 0:
+            raise ValueError("max_optimizer_steps must be a nonnegative integer")
 
 
 __all__ = [

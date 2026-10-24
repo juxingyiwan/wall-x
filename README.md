@@ -1,201 +1,171 @@
-# Wall-X
+# Wall-X: LIBERO, RoboTwin 2.0 and ReBot
 
-<div align="left">
+[中文](README.zh-CN.md) · [Home](README.md)
 
-<a href="https://huggingface.co/x-square-robot">
-  <img src="https://img.shields.io/badge/Hugging%20Face-x--square--robot-FFB000?style=for-the-badge&logo=huggingface&logoColor=000" alt="Hugging Face">
-</a>
-<a href="https://x2robot.com/en/research/68bc2cde8497d7f238dde690">
-  <img src="https://img.shields.io/badge/Project-1E90FF?style=for-the-badge&logo=google-chrome&logoColor=fff" alt="Project Page">
-</a>
+Built on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), this repository provides training, evaluation and deployment workflows for LIBERO, RoboTwin 2.0 and ReBot / B601.
 
-<br/>
-<img src="https://img.shields.io/badge/Python-3.10-3776AB?style=flat&logo=python&logoColor=fff" alt="Python 3.10">
-<img src="https://img.shields.io/badge/PyTorch-EE4C2C?style=flat&logo=pytorch&logoColor=fff" alt="PyTorch">
-<img src="https://img.shields.io/badge/FlashAttention-0F9D58?style=flat&logo=nvidia&logoColor=fff" alt="FlashAttention">
-<img src="https://img.shields.io/badge/LeRobot-222?style=flat&logo=huggingface&logoColor=ffd21e" alt="LeRobot">
-<img src="https://img.shields.io/badge/CUDA-12.x-76B900?style=flat&logo=nvidia&logoColor=fff" alt="CUDA">
-<img src="https://img.shields.io/badge/OS-Ubuntu%2022.04-E95420?style=flat&logo=ubuntu&logoColor=fff" alt="Ubuntu 22.04">
+<a id="workflows"></a>
 
-</div>
+## Choose one workflow
 
-## Building General-Purpose Robots Based on Embodied Foundation Model
+| Workflow | Complete guide |
+| --- | --- |
+| LIBERO: install, prepare data, train, resume and evaluate | [English](docs/libero.md) · [中文](docs/libero.zh-CN.md) |
+| RoboTwin 2.0: model/simulator setup, convert, train and evaluate | [English](docs/robotwin.md) · [中文](docs/robotwin.zh-CN.md) |
+| ReBot / B601: install, prepare/train, local/network inference, sync and RTC | [English](docs/rebot.md) · [中文](docs/rebot.zh-CN.md) |
 
-We are building embodied foundation models to capture and compress the world's
-most valuable data: continuous, high-fidelity physical interaction.
+Each workflow uses its own Conda environment; RoboTwin has a separate simulator environment. The guides cover setup, resources, commands and troubleshooting.
 
-By creating a direct feedback loop between model decisions and the body's lived
-experience, we enable generalizable intelligence that understands not just how
-the world works, but how to act effectively within it.
+Clone this repository, run the guide commands from its root and replace placeholder paths. Model training and inference require Linux, an NVIDIA GPU and CUDA. Each guide explains how to obtain foundation weights, prepare data and use checkpoints.
 
-## Repository
+<a id="experiments"></a>
 
-This repository provides the training and inference code for the WALL series
-open-source embodied foundation models. It includes LeRobot data preparation,
-model configuration, flow-matching and FAST action branches, public serving and
-evaluation utilities, and exported CUDA operator sources that compile during
-package installation.
+## Experimental results
 
-## News
+Training configurations and evaluation procedures are documented in the corresponding guides.
 
-- [June 2026] Wall-X 1.1.0 updates the open-source training and inference
-  stack for Wall-OSS-0.5, including the public serving/evaluation runtime,
-  DMuon training support, and install-time CUDA operator builds.
-- [May 2026] We introduce [**WALL-WM: Carving World Action Modeling at the Event Joints**](https://arxiv.org/pdf/2606.01955), a World Action Model that couples future-video imagination with action prediction at semantic event boundaries.
-- [May 2026] We introduce [**Wall-OSS-0.5: A Deployment-Ready VLA with Gradient-Bridged Pretraining**](https://arxiv.org/pdf/2605.30877v2), an open-source model for directly deployable real-robot manipulation and downstream adaptation.
-- [Sept 2025] We introduce [**WALL-OSS: Igniting VLMs toward the Embodied Space**](https://arxiv.org/pdf/2509.11766), an end-to-end embodied foundation model that leverages large-scale multimodal pretraining to achieve embodiment-aware vision-language understanding, language-action association, and robust manipulation capability.
+<a id="libero-results"></a>
 
-## Models
+### LIBERO
 
-- WALL-OSS-0.5: https://huggingface.co/x-square-robot/wall-oss-0.5
-- WALL-OSS-FLOW-0.1: https://huggingface.co/x-square-robot/wall-oss-flow-0.1
-- WALL-OSS-FLOW: https://huggingface.co/x-square-robot/wall-oss-flow
-- WALL-OSS-FAST: https://huggingface.co/x-square-robot/wall-oss-fast
+Both initializations use the Wall-X action architecture and full-parameter training: effective batch 128, seed 10222, a 30,000-step cosine schedule and evaluation at 25,000 updates. Each suite contains 10 tasks with 50 trials/task (2,000 trials per initialization). The Qwen initialization loads the pretrained vision-language backbone with a newly initialized action expert. See the [training and evaluation settings](docs/libero.md#train).
 
-## Environment Setup
+| Suite | Wall-OSS-0.5 initialization | Qwen2.5-VL-3B initialization |
+| --- | --- | --- |
+| Spatial | 98.8% (494/500) | 98.2% (491/500) |
+| Object | 99.6% (498/500) | 100.0% (500/500) |
+| Goal | 98.4% (492/500) | 98.8% (494/500) |
+| Long | 96.0% (480/500) | 94.6% (473/500) |
+| **Overall** | **98.2% (1964/2000)** | **97.9% (1958/2000)** |
 
-Create and activate a conda environment:
+Each initialization uses one training run.
 
-```bash
-conda create --name wallx python=3.10
-conda activate wallx
-```
+![LIBERO training flow loss for Wall-OSS-0.5 and Qwen2.5-VL-3B initializations](assets/libero_training_loss.png)
 
-Install requirements:
+Training flow loss through 25,000 steps, with a logarithmic vertical axis. Faint lines show logged interval averages; solid lines show a trailing 25-point mean (about 250 steps).
 
-```bash
-pip install -r requirements.txt
-export FLASH_ATTN_CUDA_ARCHS=$(python -c 'import torch; print(f"{torch.cuda.get_device_capability()[0]}{torch.cuda.get_device_capability()[1]}")')
-MAX_JOBS=4 pip install flash-attn==2.8.3 --no-build-isolation
-```
+<a id="robotwin-results"></a>
 
-Install DMuon, which is used by the default training configs:
+### RoboTwin 2.0
 
-```bash
-pip install "dmuon @ git+https://github.com/X-Square-Robot/dmuon.git"
-```
+Five-task training uses 50 clean + 500 randomized demonstrations per task (2,750 total), effective batch 256 and a checkpoint at 30,000 completed updates. Evaluation uses unseen instructions, 32 predicted / 16 executed actions and **100 expert-valid trials per task and condition**: 500 Clean + 500 Randomized trials. See the [evaluation settings](docs/robotwin.md#reported-settings) for scenes and seeds.
 
-Install LeRobot:
+| Task | Clean successes/trials | Randomized successes/trials |
+| --- | --- | --- |
+| `open_microwave` | 67/100 | 85/100 |
+| `click_bell` | 71/100 | 92/100 |
+| `stack_blocks_three` | 79/100 | 78/100 |
+| `place_shoe` | 97/100 | 96/100 |
+| `put_object_cabinet` | 76/100 | 82/100 |
+| **Five-task mean** | **78.0% (390/500)** | **86.6% (433/500)** |
 
-```bash
-git clone https://github.com/huggingface/lerobot.git
-cd lerobot
-pip install --no-deps -e .
-```
+Success rates use valid evaluation episodes across the five tasks. Policy failures count in the denominator; expert-invalid scenes are excluded before evaluation.
 
-Use `--no-deps` for LeRobot so it does not override the Wall-X dependency
-versions installed from `requirements.txt`.
+<a id="rebot-results"></a>
 
-Install Wall-X:
+### ReBot: Wall-OSS-0.5 with and without RTC
 
-```bash
-MAX_JOBS=8 pip install --no-build-isolation -e .
-```
+Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, disabled on the right**. Click the preview to watch the original side-by-side comparison.
 
-Public helper scripts live under `scripts/`; the examples below use the
-repository-root form, such as `python scripts/fake_inference.py`.
+[![Wall-OSS-0.5 comparison: RTC enabled on the left, disabled on the right](assets/rebot_walloss05_rtc_comparison.jpg)](assets/rebot_walloss05_rtc_comparison.mp4)
 
-The exported CUDA operator sources are included in
-`wall_x/model/core/ops/csrc/`. `setup.py` builds them with PyTorch
-`CUDAExtension` when Wall-X is installed. `ninja` is included in
-`requirements.txt` for parallel builds, and `MAX_JOBS` controls compile
-parallelism. `--no-build-isolation` is required so the build can use the torch
-package already installed in the active environment.
+[Play comparison](assets/rebot_walloss05_rtc_comparison.mp4) · [Operating steps](docs/rebot.md#operate) · [Action-padding notes and ablation](#action-padding)
 
-## Training
+<a id="upstream"></a>
 
-### Finetune on LeRobot Datasets
+## Wall-X documentation
 
-Before training, see `workspace/README.md` for configuration details,
-including:
+Official documentation from revision `ce2a1ae31d9ee1028b97ca40e3f66034cf8c0e5f`, with the official homepages saved as `README.upstream.*`. Use the workflow guides above for this repository.
 
-- Training script configuration
-- GPU setup
-- Model and data paths
-- Robot DOF configuration
-- Training hyperparameters
+| Original material | Location |
+| --- | --- |
+| Official overview, models, community and citation | [English](README.upstream.md) · [中文](README.upstream.zh-CN.md) |
+| Original usage and script documentation | [Workspace](workspace/README.md) · [Scripts](scripts/README.md) |
+| Original hardware examples | [Flowers](workspace/TRAIN_ARRANGE_3_FLOWERS.md) · [RTX 5090 setup](workspace/rtx5090/README.md) · [Deployment](workspace/rtx5090/DEPLOY.md) · [Original notes](workspace/rtx5090/local/NOTES.md) |
 
-Download the pretrained checkpoint, copy
-`workspace/example/lerobot/qwen2_5_lerobot_template.yml`, replace the
-placeholder paths, and launch training with:
+<a id="contribute"></a>
 
-```bash
-python -m wall_x.trainer.fsdp_trainer.train_fsdp --config <path/to/config.yml>
-```
+## Contribute and develop
 
-For Wall-OSS-0.5 fine-tuning, normalization, LIBERO evaluation, and open-loop
-WebSocket evaluation instructions, see `workspace/README.md`.
+See [Contributing](CONTRIBUTING.md) ([中文](CONTRIBUTING.zh-CN.md)) for tests and PR preparation, and [Technical development notes](#development) ([中文](README.zh-CN.md#development)) for implementation details. The project uses [Apache-2.0](LICENSE); third-party attribution is in the [source notices](NOTICE.txt) and [client notices](deployment/client/NOTICE.txt). Models and datasets use their respective licenses.
 
-## Inference
+<a id="development"></a>
 
-### Basic Action Inference
+## Technical development notes
 
-For a minimal end-to-end example, run:
+This section covers component ownership, implementation analysis and homing bounds. See the [three workflows](#workflows) for operating procedures and [Contributing](CONTRIBUTING.md) for checks.
 
-```bash
-python scripts/fake_inference.py --checkpoint-path <path/to/checkpoint>
-```
+<a id="ownership"></a>
 
-This script demonstrates how to:
+### Component ownership
 
-- Load the Wall-OSS model with `Qwen2_5_VLMoEForAction.from_pretrained()`
-- Prepare proprioceptive inputs, attention masks, and dataset specs
-- Run inference in `validate` mode at bfloat16
-- Validate output shape and check numerical stability
+| Component | Responsibility |
+| --- | --- |
+| `wall_x/model`, `data`, `config`, `trainer`, `_vendor/harrix` | Upstream core; shared padding, loader and recovery patches remain here |
+| `wall_x/robotwin`, `scripts/*robotwin*` | RoboTwin conversion/training/evaluation and isolated simulator workers |
+| `wall_x/data/b601*`, `wall_x/trainer/adapters/b601*` | B601 preparation, representation and recovery |
+| `deployment/`, `deployment/client/` | Model backends/launcher and independently packaged hardware controller |
+| `environments/`, `workspace/example/` | Dependency profiles and public configuration templates |
 
-### Simulator Evaluation
+<a id="implementation-analysis"></a>
 
-Convenience launchers for closed-loop simulator evaluation live under
-`scripts/`. LIBERO simulator setup is optional and documented with the helper
-scripts; see `scripts/README.md`.
+### Wall-X improvements and analysis
 
-```bash
-bash scripts/run_libero.sh <path/to/checkpoint>
-```
+<a id="action-padding"></a>
 
-### WebSocket Serving
+#### Action padding: training/inference alignment
 
-Start a Wall-X WebSocket server with:
+This experiment was motivated by action jitter observed during ReBot deployment and targets a mismatch already present in [upstream Wall-X ce2a1ae](https://github.com/X-Square-Robot/wall-x/blob/ce2a1ae31d9ee1028b97ca40e3f66034cf8c0e5f/wall_x/model/qact/qwen2_5/modeling_qwen2_5_vl_act.py#L2080-L2092). B601 uses seven physical action channels (six arm joints and a gripper), padded to the model's 26 dimensions. Training normalizes the physical channels before appending zeros; the upstream inference path instead maps raw zero to -1 when [checkpoint statistics already cover all 26 dimensions](https://github.com/X-Square-Robot/wall-x/blob/ce2a1ae31d9ee1028b97ca40e3f66034cf8c0e5f/wall_x/model/core/action/normalizer.py#L98-L109), with `min=0, delta=1` in the virtual channels. Although excluded from the loss, virtual channels still enter the shared action encoder and can affect physical outputs. The ablation measures the effect of restoring the training-time zero endpoint on predicted-action smoothness.
 
-```bash
-bash scripts/run_serving.sh \
-  --checkpoint-path <path/to/checkpoint> \
-  --train-config-path <path/to/config.yml> \
-  --port 32195
-```
+<a id="padding-video"></a>
 
-The wrapper has no built-in checkpoint path. It returns raw model action chunks
-by default, which is suitable for open-loop evaluation. Pass
-`--serialize-actions` for clients that expect robot-serialized actions.
+##### Real-robot comparison
 
-### Open-Loop WebSocket Evaluation
+Wall-OSS-0.5 was trained on 100 demonstrations for 12 epochs to open a drawer and place a block inside. RTC is enabled in both runs; only action padding alignment changes: aligned on the left, unaligned on the right.
 
-To compare predictions from a running Wall-X WebSocket server against LeRobot
-ground truth, run:
+[![Action padding on the robot: aligned on the left, unaligned on the right, with RTC enabled in both runs](assets/rebot_walloss05_padding_comparison.jpg)](assets/rebot_walloss05_padding_comparison.mp4)
 
-```bash
-python scripts/draw_openloop_plot.py \
-  --uri ws://127.0.0.1:32195 \
-  --dataset-root <path/to/lerobot_dataset> \
-  --train-config <path/to/config.yml> \
-  --episode-indices 0,1,2
-```
+[Play the comparison video](assets/rebot_walloss05_padding_comparison.mp4)
 
-## Join Our Community
+<a id="padding-offline"></a>
 
-Scan the QR code on WeChat to join the discussion group.
+##### Offline prediction ablation
 
-<img src="assets/QRcode_community.jpg" alt="QR Code" width="400">
+Six checkpoints were replayed on recorded robot observations with matched weights, observations and noise within each pair. Only the virtual action endpoint changed from -1 to 0; state/masks were fixed, with RTC, smoothing and clipping disabled. Across 900 paired predictions, the zero endpoint reduced the metric in all 900 pairs.
 
-## Cite Us
+For each prediction, smoothness is measured by the mean absolute second difference over the first $K = 16$ steps and $D = 6$ arm joints:
 
-If you find WALL-OSS models useful, please cite:
+$$
+J = \frac{1}{D(K-2)}
+    \sum_{j=1}^{D}\sum_{k=0}^{K-3}
+    \left|q_{k+2,j} - 2q_{k+1,j} + q_{k,j}\right|.
+$$
 
-```bibtex
-@article{zhai2025igniting,
-  title   = {Igniting VLMs Toward the Embodied Space},
-  author  = {Zhai, Andy and Liu, Brae and Fang, Bruno and Cai, Chalse and Ma, Ellie and Yin, Ethan and Wang, Hao and Zhou, Hugo and Wang, James and Shi, Lights and Liang, Lucy and Wang, Make and Wang, Qian and Gan, Roy and Yu, Ryan and Li, Shalfun and Liu, Starrick and Chen, Sylas and Chen, Vincent and Xu, Zach},
-  journal = {arXiv preprint arXiv:2509.11766},
-  year    = {2025}
-}
-```
+Here $q_{k,j}$ is the predicted angle of joint $j$ at step $k$, in degrees. The mean covers 14 second differences per joint (84 terms in total). The unit is degrees/sample-step²; lower is smoother. Values below pool the corresponding checkpoints by pair count.
+
+| Task | Pairs | Endpoint -1 | Endpoint 0 | Reduction |
+| --- | --- | --- | --- | --- |
+| Bowl | 360 | 2.958 | 0.262 | 91.1% |
+| Drawer | 270 | 2.334 | 0.206 | 91.2% |
+| Pen | 270 | 2.557 | 0.263 | 89.7% |
+
+These checkpoints used absolute joint actions; the current B601 template uses delta actions. See [ReBot configuration](docs/rebot.md#data).
+
+<a id="homing"></a>
+
+### Homing bounds
+
+The following constants control the nominal homing sweep and gripper-zero checks. Check the full arm path for obstacles before operation. Keep the values aligned with source and test feedback-loss and timeout paths with fake devices:
+
+| Source constant | Value | Meaning |
+| --- | --- | --- |
+| `front_home.FORWARD_LIMIT_M` | `0.5` | Forward plane (m) |
+| `front_home.CLEARANCE_M` | `0.03` | Nominal margin (m) |
+| `zero_servo.ZERO_PRECISION_DEG` | `0.5` | Maximum gripper zero error (degrees) |
+| `zero_servo.MAX_REFINEMENT_S` | `10.0` | Refinement deadline (s) |
+
+<a id="source"></a>
+
+### Authoritative implementation references
+
+Use [padding](wall_x/inference_padding.py), [checkpoint selection](wall_x/checkpoint_weights.py), the [client configuration](deployment/client/src/wallx_client/config.py), [wire protocol](deployment/client/src/wallx_client/protocol.py) and [sample manifest](deployment/client/docs/examples/server_manifest.json) when changing behavior. Inspect actual parsers through `--help`. Retain third-party attribution in [NOTICE](NOTICE.txt) and the [client notice](deployment/client/NOTICE.txt).

@@ -72,6 +72,7 @@ class WebsocketPolicyServer:
         self._host = host
         self._port = port
         self._metadata = metadata or {}
+        self._infer_lock = asyncio.Lock()
 
         # Dynamic batching
         self._scheduler = None
@@ -148,9 +149,13 @@ class WebsocketPolicyServer:
                     action = await self._scheduler.add_request(obs)
                 else:
                     # Single inference path
-                    action = await asyncio.to_thread(self._policy.infer, obs)
+                    async with self._infer_lock:
+                        action = await asyncio.to_thread(self._policy.infer, obs)
 
                 infer_time = time.monotonic() - infer_time
+
+                if "request_id" in obs:
+                    action["request_id"] = obs["request_id"]
 
                 action["server_timing"] = {
                     "infer_ms": infer_time * 1000,

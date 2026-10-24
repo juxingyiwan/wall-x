@@ -39,30 +39,46 @@ def load_lerobot_normalizers(cfg: Any):
             "data.lerobot_config.repo_id"
         )
 
-    dataset_name = str(lerobot_config["repo_id"])
-    norm_stats = load_norm_stats(
-        norm_stats_path,
-        key_mappings,
-        dof_config=dict(cfg.task.dof_config or {}),
-        agent_pos_config=dict(cfg.task.agent_pos_config or {}),
+    from wall_x.data.b601 import (
+        configure_normalizers,
+        load_b601_norm_stats,
+        settings,
+        validate_statistics,
     )
+
+    raw_config = dict(getattr(cfg, "_raw_yaml", {}) or {})
+    opts = settings(raw_config)
+    validate_statistics(
+        raw_config, norm_stats_path, split_path=opts["split_manifest"] if opts else None
+    )
+    dataset_name = str(lerobot_config["repo_id"])
+    if "." in dataset_name:
+        raise ValueError(
+            "repo_id is the normalizer key and cannot contain '.'. Use a stable ID (e.g. libero_all) and put the dataset path in lerobot_config.root. Existing checkpoint keys must not be renamed when resuming."
+        )
+    if opts is not None:
+        norm_stats = load_b601_norm_stats(norm_stats_path, key_mappings)
+    else:
+        norm_stats = load_norm_stats(
+            norm_stats_path,
+            key_mappings,
+            dof_config=dict(cfg.task.dof_config or {}),
+            agent_pos_config=dict(cfg.task.agent_pos_config or {}),
+        )
     normalizer_action, normalizer_propri = create_normalizers_from_lerobot_norm_stats(
         norm_stats,
         dataset_name,
         cfg.action_dim,
         cfg.propri_dim,
     )
+    configure_normalizers(normalizer_action, normalizer_propri, raw_config)
     return normalizer_action, normalizer_propri, norm_stats_path, dataset_name
 
 
 class _LerobotDatasetWrapper:
     """Trainer-facing wrapper aligning PreprocessedDataset with v1 API.
 
-    PreprocessedDataset internally switches ``self._dataset`` between
-    its train/val splits via ``_train()`` / ``_eval()``. Its
-    ``get_train_dataloader`` / ``get_val_dataloader`` return
-    ``(dataloader, sampler)`` tuples and no-argument calls are supported
-    (they read rank/world_size/seed from the inner object itself).
+    Train and validation DataLoaders own independent split views.
 
     This wrapper:
     - Caches the rebuilt train dataloader / sampler so
@@ -92,32 +108,14 @@ class _LerobotDatasetWrapper:
     def __len__(self) -> int:
         return self._train_num
 
-    def _activate_train_split(self) -> None:
-        if hasattr(self._inner, "_train"):
-            self._inner._train()
-
     def get_train_dataloader(self):
-        self._activate_train_split()
         return self._train_dataloader
 
     def get_val_dataloader(self):
-        # PreprocessedDataset shares one ``_dataset`` pointer between its
-        # train and val splits (flipped by ``_train()`` / ``_eval()``).
-        # The val DataLoader's DistributedSampler caches total_size sized
-        # to the val split but ``__iter__`` reads ``len(self.dataset)``
-        # live - if a preceding train_loop left the pointer at train, that
-        # live len is ~20x total_size and DistributedSampler asserts.
-        # Rebuild each time so ``_eval()`` runs and a fresh sampler is
-        # snapped to the current (val) split length. Mirrors the train-side
-        # rebuild-on-every-epoch pattern.
-        if self._val_dataloader is None:
-            return None
-        self._val_dataloader, _ = self._inner.get_val_dataloader()
         return self._val_dataloader
 
     def set_epoch(self, epoch: int) -> None:
         """Seed the per-epoch shuffle in the train DistributedSampler."""
-        self._activate_train_split()
         if self._train_sampler is not None and hasattr(
             self._train_sampler, "set_epoch"
         ):
@@ -185,6 +183,11 @@ def _build_flat_config(cfg: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     }
     if raw_data.get("max_length") is not None:
         data_section["max_length"] = raw_data["max_length"]
+    for key in ("min_pixels", "max_pixels", "image_factor"):
+        if key in raw_data:
+            data_section[key] = raw_data[key]
+    if data.task_sampling is not None:
+        data_section["task_sampling"] = data.task_sampling
     if data.priority_order is not None:
         data_section["priority_order"] = data.priority_order
     if data.camera_name_mapping is not None:
@@ -231,7 +234,7 @@ def _build_flat_config(cfg: Any) -> Tuple[Dict[str, Any], Dict[str, Any]]:
             or raw.get("state_bins")
             or 256
         ),
-        "data": data_section,
+        "data": {**data_section, "lerobot_config": lerobot_cfg},
     }
     return flat, lerobot_cfg
 
@@ -247,9 +250,14 @@ def load_lerobot_v2(
     subsequent rebuilds inside ``set_epoch`` - callers doing dynamic
     resampling should read from the mp.Value, not from this snapshot.
     """
+    from wall_x.data.backends.lerobot.episode_split import validate_resume_split
     from wall_x.data.backends.lerobot.loader import load_lerobot_data
 
     flat_cfg, lerobot_cfg = _build_flat_config(cfg)
+    if lerobot_cfg.get("b601") is None:
+        validate_resume_split(
+            cfg.checkpoint.resume_from, lerobot_cfg, cfg.data.train_test_split
+        )
 
     if dist.is_initialized():
         rank = dist.get_rank()
@@ -259,7 +267,12 @@ def load_lerobot_v2(
         world_size = 1
 
     seed = cfg.hyperparams.seed
-    inner, _ = load_lerobot_data(
+    loader = load_lerobot_data
+    if lerobot_cfg.get("b601") is not None:
+        from wall_x.data.backends.lerobot.b601_adapter import load_b601_data
+
+        loader = load_b601_data
+    inner, _ = loader(
         flat_cfg,
         lerobot_cfg,
         rank=rank,
@@ -267,10 +280,6 @@ def load_lerobot_v2(
         seed=seed,
     )
 
-    # PreprocessedDataset.get_*_dataloader returns (dataloader, sampler).
-    # Build val first, train second, so the inner ``_dataset`` pointer is
-    # left at the train split when we finish - workers fork from that
-    # state on first iteration.
     val_dataloader, _ = inner.get_val_dataloader()
     val_num = len(val_dataloader) if val_dataloader is not None else 0
 
@@ -317,15 +326,7 @@ def build(cfg, ctx):
 
     wrapper, train_dataloader, train_num = load_lerobot_v2(cfg)
 
-    # PreprocessedDataset shares one ``self._dataset`` pointer between
-    # train and val splits (flipped by ``_train()`` / ``_eval()``).
-    # ``wrapper.get_val_dataloader()`` flips the pointer to val. Flip back once
-    # here so the initial train loop starts from the right split even if callers
-    # inspect the raw ``train_dataloader`` before invoking ``set_epoch``.
     val_loader = wrapper.get_val_dataloader()
-    inner = wrapper._inner
-    if hasattr(inner, "_train"):
-        inner._train()
 
     return DataBundle(
         dataset=wrapper,

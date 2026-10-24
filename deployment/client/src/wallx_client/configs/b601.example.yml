@@ -1,0 +1,58 @@
+# Full example for direct wallx-client use; the unified entry uses deployment/configs/.
+# Inspectable example only. Verify hardware and replace the checkpoint digest before use.
+task: Describe the task used to train your checkpoint
+output_root: ./rollouts
+display_data: true
+save_rollout: true
+policy:
+  uri: ws://127.0.0.1:32195
+  checkpoint_id: example_experiment/12_16000
+  checkpoint_sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+  horizon: 32
+  action_dims:
+  - 6
+  - 1
+  - 19
+  camera_names:
+  - front_view
+  - side_view
+  connect_timeout_s: 10
+  request_timeout_s: 15
+  jpeg_quality: 95
+robot:
+  min_temperature_c: -25.0
+  temperature_feedback_grace_s: 0.5  # Brief below-minimum feedback; 0 rejects immediately.
+  can_channel: can0
+  camera_buffer_size: 2
+  camera_recovery_timeout_s: 1.0
+  camera_max_consecutive_failures: 3
+  camera_max_reopens: 3
+  robot_id: follower1
+  camera_mapping_verified: false
+  camera_devices:
+    front_view: /dev/v4l/by-id/REPLACE_FRONT-video-index0
+    side_view: /dev/v4l/by-id/REPLACE_WRIST-video-index0
+  lock_paths:
+  - /tmp/wallx-example-session.lock
+  - /tmp/wallx-example-control.lock
+control:
+  hz: 30
+  execution_horizon: 16
+  duration_s: 300
+  max_policy_chunks: 100000
+  max_tick_s: 0.15
+  max_response_age_s: 2  # RTC preflight only.
+  max_state_drift_arm_deg: 2  # RTC only.
+  max_state_drift_gripper_deg: 15  # RTC only.
+  settle_gripper_deg: 3  # Startup/shutdown gripper arrival tolerance.
+  startup_home: true
+  startup_gripper_speed_deg_s: 60
+rtc:
+  enabled: false
+  guidance_mode: lerobot
+  max_guidance: 10.0
+shutdown:
+  home_timeout_s: 65
+  arm_tolerance_deg: 2
+  settle_s: 0.25
+  feedback_recovery_timeout_s: 1.0

@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import time
+from contextlib import ExitStack
 
 import numpy as np
 
@@ -36,69 +37,69 @@ def run(cfg: EvalConfig) -> None:
     # 1) Seed the driver process.
     set_seed_everywhere(cfg.env.seed)
 
-    # 2) Build DirectModelHandle; the model is loaded in the driver process.
-    logger.info("Constructing DirectModelHandle in the driver process")
-    t_model = time.time()
-    model_handle = DirectModelHandle(cfg)
-    logger.info("Model loaded in %.1fs", time.time() - t_model)
+    with ExitStack() as cleanup:
+        # 2) Build DirectModelHandle; the model is loaded in the driver process.
+        logger.info("Constructing DirectModelHandle in the driver process")
+        t_model = time.time()
+        model_handle = DirectModelHandle(cfg)
+        cleanup.callback(model_handle.shutdown)
+        logger.info("Model loaded in %.1fs", time.time() - t_model)
 
-    # 3) Start env subprocesses.
-    logger.info("Starting %s SubprocEnvHandle(s)", cfg.runtime.num_workers)
-    env_handles = [
-        SubprocEnvHandle(cfg, worker_id=i) for i in range(cfg.runtime.num_workers)
-    ]
+        # 3) Start env subprocesses.
+        logger.info("Starting %s SubprocEnvHandle(s)", cfg.runtime.num_workers)
+        env_handles = []
+        for worker_id in range(cfg.runtime.num_workers):
+            handle = SubprocEnvHandle(cfg, worker_id=worker_id)
+            cleanup.callback(handle.shutdown)
+            env_handles.append(handle)
 
-    # 4) JobState runs in frame-sync mode for lockstep evaluation.
-    os.makedirs(cfg.runtime.log_dir, exist_ok=True)
-    log_path = os.path.join(cfg.runtime.log_dir, "state.jsonl")
-    report_path = os.path.join(cfg.runtime.log_dir, "report.json")
-    episodes = enumerate_episodes_for(cfg)
-    logger.info("env.type=%r; scheduled %s episodes", cfg.env.type, len(episodes))
-    state = JobState(
-        episodes,
-        log_path,
-        batch_sync_mode=True,
-        batch_size=cfg.runtime.num_workers,
-    )
+        # 4) JobState runs in frame-sync mode for lockstep evaluation.
+        os.makedirs(cfg.runtime.log_dir, exist_ok=True)
+        log_path = os.path.join(cfg.runtime.log_dir, "state.jsonl")
+        report_path = os.path.join(cfg.runtime.log_dir, "report.json")
+        episodes = enumerate_episodes_for(cfg)
+        logger.info("env.type=%r; scheduled %s episodes", cfg.env.type, len(episodes))
+        state = JobState(
+            episodes,
+            log_path,
+            batch_sync_mode=True,
+            batch_size=cfg.runtime.num_workers,
+        )
 
-    # 5) Main loop, one frame at a time.
-    t0 = time.time()
-    frame_idx = 0
-    while not state.is_drained():
-        frame_eps = state.claim_frame()
-        if not frame_eps:
-            # Previous frame still has in-flight episodes.
-            time.sleep(0.05)
-            continue
+        # 5) Main loop, one frame at a time.
+        t0 = time.time()
+        frame_idx = 0
+        while not state.is_drained():
+            frame_eps = state.claim_frame()
+            if not frame_eps:
+                # Previous frame still has in-flight episodes.
+                time.sleep(0.05)
+                continue
 
-        results = _run_frame(frame_eps, model_handle, env_handles, cfg, frame_idx)
-        for ep, res in zip(frame_eps, results):
-            if "_error" in res:
-                state.fail(ep, str(res["_error"]))
-            else:
-                state.complete(ep, res)
-        frame_idx += 1
+            results = _run_frame(frame_eps, model_handle, env_handles, cfg, frame_idx)
+            for ep, res in zip(frame_eps, results):
+                if "_error" in res:
+                    state.fail(ep, str(res["_error"]))
+                else:
+                    state.complete(ep, res)
+            frame_idx += 1
 
-    elapsed = time.time() - t0
-    logger.info("All episodes finished in %.1fs (%.1f min)", elapsed, elapsed / 60)
+        elapsed = time.time() - t0
+        logger.info("All episodes finished in %.1fs (%.1f min)", elapsed, elapsed / 60)
 
-    state.dump_final(report_path)
-    with open(report_path) as f:
-        report = json.load(f)
-    overall = report["overall"]
-    logger.info(
-        "attempted=%s, successes=%s, success_rate=%.2f%%, failed=%s",
-        overall["attempted"],
-        overall["successes"],
-        overall["success_rate"] * 100,
-        overall["failed"],
-    )
-    logger.info("Report: %s", report_path)
-    logger.info("State log: %s", log_path)
-
-    for h in env_handles:
-        h.shutdown()
-    model_handle.shutdown()
+        state.dump_final(report_path)
+        with open(report_path) as f:
+            report = json.load(f)
+        overall = report["overall"]
+        logger.info(
+            "attempted=%s, successes=%s, success_rate=%.2f%%, failed=%s",
+            overall["attempted"],
+            overall["successes"],
+            overall["success_rate"] * 100,
+            overall["failed"],
+        )
+        logger.info("Report: %s", report_path)
+        logger.info("State log: %s", log_path)
 
 
 def _run_frame(

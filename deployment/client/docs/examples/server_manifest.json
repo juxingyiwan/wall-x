@@ -1,0 +1,22 @@
+{
+  "wallx_client": {
+    "protocol_version": 1,
+    "state_schema": "joint_state_v1",
+    "state_units": "physical_motor_degrees",
+    "action_units": "recorded_commands_before_driver_sign_and_gripper_scale",
+    "state_dim": 7,
+    "action_dim": 26,
+    "action_horizon": 32,
+    "camera_names": [
+      "front_view",
+      "side_view"
+    ],
+    "checkpoint_id": "example_experiment/12_16000",
+    "checkpoint_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "request_id_echo": true,
+    "padding": "zero",
+    "model_action_representation": "b601_joint_delta_v1",
+    "wire_action_representation": "b601_joint_absolute_v1",
+    "preprocessing_sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  }
+}

@@ -58,6 +58,7 @@ class WallXPolicy(BasePolicy):
         self.image_passing_mode = image_passing_mode
         self.default_infer_mode = default_infer_mode
         self.serialize_actions = serialize_actions
+        self.rtc_capability = {"version": 1, "supported": False}
         logger.info(
             "Image passing mode: %s, robot_type: %s, default_infer_mode: %s, "
             "serialize_actions: %s, smooth_action: %s, smooth_gripper: %s",
@@ -209,6 +210,11 @@ class WallXPolicy(BasePolicy):
             When serialize_actions=False: Raw model_output dict.
             If infer_mode is flow_with_subtask, also includes 'subtask'.
         """
+        from wall_x._vendor.harrix.serving.rtc import validate_request, acknowledgement
+        rtc_request = validate_request(
+            obs.get("rtc"), self.rtc_capability,
+            obs.get("infer_mode", self.default_infer_mode),
+        )
         state = obs["state"]
         views = obs["views"]
         instruction = obs.get("instruction") or self.config.default_instruction or ""
@@ -221,7 +227,12 @@ class WallXPolicy(BasePolicy):
 
         mode = obs.get("infer_mode", self.default_infer_mode)
         with ScopeTimer(f"infer_{mode}"):
-            model_output = self._run_action_infer(observation, instruction, mode)
+            if rtc_request is None:
+                model_output = self._run_action_infer(observation, instruction, mode)
+            else:
+                model_output = self.model_wrapper.infer_flow_action(
+                    observation, instruction, rtc_request=rtc_request
+                )
 
         self._apply_smoothing(model_output)
         if (
@@ -235,7 +246,10 @@ class WallXPolicy(BasePolicy):
         # Single-arm LIBERO has no left-arm EE to serialize; dual-arm follow1/follow2
         # layout would fail in get_serialized_actions. Return raw action chunks instead.
         if not self.serialize_actions or self._is_single_arm_right_only():
-            return self._pack_action_chunk_response(model_output)
+            response = self._pack_action_chunk_response(model_output)
+            if rtc_request is not None:
+                response["rtc"] = acknowledgement(rtc_request)
+            return response
 
         return self.robot_preprocessor.get_serialized_actions(
             model_output, robot_action_interpolate_multiplier=1
@@ -278,6 +292,8 @@ class WallXPolicy(BasePolicy):
         Returns:
             List of action dicts.
         """
+        if any(obs.get("rtc", {}).get("enabled", False) for obs in obs_list):
+            raise ValueError("RTC v1 does not support batch inference")
         batch_size = len(obs_list)
         logger.info(f"WallXPolicy.infer_batch: processing {batch_size} observations")
 
@@ -325,4 +341,13 @@ class WallXPolicy(BasePolicy):
 
     @property
     def metadata(self) -> Dict[str, Any]:
-        return {"batch_enabled": True, "model": "wall-x"}
+        from wall_x._vendor.harrix.serving._wallx_infer.joint_state import joint_metadata
+
+        if not hasattr(self, "_joint_metadata"):
+            self._joint_metadata = joint_metadata(
+                self.config, weights=self.model_wrapper.checkpoint_weights
+            )
+        result = {"batch_enabled": True, "model": "wall-x", "rtc": self.rtc_capability}
+        if self._joint_metadata is not None:
+            result["wallx_client"] = self._joint_metadata
+        return result

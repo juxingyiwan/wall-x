@@ -1,13 +1,15 @@
 import os
 import torch
 import copy
-from safetensors.torch import load_file
 import numpy as np
 from PIL import Image
 from qwen_vl_utils.vision_process import smart_resize
 from transformers import BatchFeature
 
 from wall_x.trainer.trainer_utils import load_wallx_processors
+from wall_x.model.core.action.normalizer import zero_virtual_padding
+from wall_x.inference_padding import apply_inference_padding, validate_padding
+from wall_x.checkpoint_weights import resolve_checkpoint_weights
 
 from wall_x._vendor.x2robot_utils.text_templates import (
     preprocesser_call,
@@ -21,6 +23,7 @@ from wall_x._vendor.x2robot_utils.grounding import (
 from wall_x._vendor.harrix.serving._wallx_infer.infer_config import InferConfig
 from wall_x._vendor.harrix.utils.ckpt_load import reshape_compatible_state_dict
 from wall_x._vendor.harrix.utils.train_config import (
+    resolve_agent_pos_config,
     resolve_camera_label,
     resolve_max_length,
     resolve_state_bins,
@@ -112,6 +115,9 @@ class WallxModelWrapper:
             self.tokenizer_mixin,
         )
 
+        self.model.inference_padding = validate_padding(self.config.padding)
+        self.logger.info("Inference padding: %s", self.model.inference_padding)
+
         # log attention implementation - variant-specific layout dispatched
         # via the adapter.
         adapter_cls.log_attention_implementation(self.logger, self.model)
@@ -126,44 +132,11 @@ class WallxModelWrapper:
 
     def load_ckpt(self, checkpoint_path: str = None):
         if checkpoint_path is None:
-            checkpoint_path = self.config.checkpoint_path
+            checkpoint_path = getattr(self.config, "checkpoint_weights", None) or self.config.checkpoint_path
 
-        if os.path.exists(os.path.join(checkpoint_path, "global_step.pth")):
-            global_step = torch.load(os.path.join(checkpoint_path, "global_step.pth"))[
-                "global_step"
-            ]
-            self.logger.info(f"checkpoint global_step: {global_step}")
-
-        fsdp_ckpt = os.path.join(checkpoint_path, "pytorch_model_fsdp.bin")
-        safetensor_ckpt = os.path.join(checkpoint_path, "model.safetensors")
-        if os.path.exists(fsdp_ckpt):
-            self.logger.info(f"Loading FSDP checkpoint: {fsdp_ckpt}")
-            state_dict = torch.load(fsdp_ckpt, map_location="cpu")
-            # Unwrap outer dict (e.g. {'state_dict': {...}})
-            if isinstance(state_dict, dict) and "state_dict" in state_dict:
-                self.logger.info(
-                    "Using nested state_dict inside pytorch_model_fsdp.bin"
-                )
-                state_dict = state_dict["state_dict"]
-        elif os.path.exists(safetensor_ckpt):
-            self.logger.info(f"loading safetensors checkpoint: {safetensor_ckpt}")
-            state_dict = load_file(safetensor_ckpt, device="cpu")
-        else:
-            raise FileNotFoundError(
-                f"ERROR: No checkpoint found under {checkpoint_path}. "
-                "Expecting either pytorch_model_fsdp.bin or model.safetensors."
-            )
-
-        # Qwen models need fused weight conversion
-        if not self.ModelClass.is_fused(state_dict):
-            self.logger.info(
-                "Converting non-fused weights to fused format...",
-            )
-            state_dict = self.ModelClass.convert_to_fused(state_dict)
-        else:
-            self.logger.info(
-                "The weights is fused, skipping conversion.",
-            )
+        from wall_x._vendor.harrix.utils.ckpt_load import load_state_dict
+        weights = resolve_checkpoint_weights(checkpoint_path)
+        state_dict = load_state_dict(str(weights), self.ModelClass)
 
         state_dict = reshape_compatible_state_dict(
             state_dict, self.model.state_dict(), log_fn=self.logger.info
@@ -181,8 +154,17 @@ class WallxModelWrapper:
         if hasattr(self.model, "load_optimized_weights"):
             self.model.load_optimized_weights(state_dict)
 
+        self.checkpoint_weights = weights
+
     def _register_normalizers(self):
-        from wall_x._vendor.harrix.utils.normalizer import build_normalizers
+        from wall_x.data.b601 import build_serving_normalizers as build_normalizers
+        from wall_x.data.b601 import semantics
+
+        spec = semantics(self.config.train_config)
+        if spec is not None:
+            cameras = list(self.config.train_config["data"]["key_mappings"]["camera"].values())
+            if self.config.action_horizon != spec["horizon"] or self.config.action_dim != 26 or list(self.config.cam_names) != cameras:
+                raise ValueError("B601 runtime horizon/layout/cameras differ from checkpoint")
 
         self.normalizer_action, self.normalizer_propri, resolved = build_normalizers(
             self.config.checkpoint_path,
@@ -272,10 +254,28 @@ class WallxModelWrapper:
             agent_pos_mask = torch.cat(agent_pos_mask_list, dim=0)
             dof_mask = torch.cat(dof_mask_list, dim=0)
 
+            # The LeRobot B601 collator normalizes float32 real dimensions
+            # first, then appends zero-valued, masked virtual dimensions.
+            from wall_x._vendor.harrix.serving._wallx_infer.joint_state import supported
+
+            joint_layout = supported(self.config)
+            if joint_layout:
+                agent_pos = agent_pos.float()
+                agent_pos_mask = agent_pos_mask.float()
+                dof_mask = dof_mask.float()
+
             if self.normalizer_propri is not None:
                 agent_pos = self.normalizer_propri.normalize_data(
                     agent_pos, dataset_names
                 )
+
+            # Both deployment backends share this boundary and the model's
+            # flow endpoint policy. Masks remain zero in either value policy.
+            state_layout = resolve_agent_pos_config(self.config.train_config)
+            agent_pos = apply_inference_padding(
+                agent_pos, state_layout, getattr(self.config, "padding", "zero")
+            )
+            agent_pos_mask = zero_virtual_padding(agent_pos_mask, state_layout)
 
             additional_inputs["proprioception"] = agent_pos.detach()
             additional_inputs["agent_pos_mask"] = agent_pos_mask
@@ -286,7 +286,8 @@ class WallxModelWrapper:
             # TODO[KC]: optimize this using batch processing
             image_inputs = []
             all_image_sizes = []
-            if ENABLE_FAST_PREPROCESS:
+            from wall_x.data.b601 import codec_from_config
+            if ENABLE_FAST_PREPROCESS and codec_from_config(self.config.train_config) is None:
                 for obs in observation:
                     current_image_inputs = self._resize_images_fast(obs)
                     image_inputs.extend(current_image_inputs)
@@ -541,7 +542,22 @@ class WallxModelWrapper:
 
         return image_inputs
 
-    def infer_flow_action(self, observation, instruction):
+    def _b601_context(self, observation):
+        from wall_x.data.b601 import codec_from_config
+        codec = codec_from_config(self.config.train_config)
+        if codec is None:
+            return None
+        raw = np.asarray(observation["robot_state_action_data"].agent_pos, dtype=np.float32)
+        if raw.shape != (1, 1, 26):
+            raise ValueError("B601 inference requires one raw state per request")
+        return codec, codec.anchor_from_state(raw[0, 0, :7])
+
+    def infer_flow_action(self, observation, instruction, *, rtc_request=None):
+        # Immutable local context is captured before preprocessing or model work.
+        b601_context = self._b601_context(observation)
+        if b601_context is not None and rtc_request is not None and rtc_request["prefix"] is not None:
+            codec, anchor = b601_context
+            rtc_request = {**rtc_request, "prefix": codec.encode_absolute_commands(rtc_request["prefix"], anchor)}
         self.logger.info("generating flow action")
         self.logger.info(f"flow action instruction: {instruction}")
 
@@ -550,6 +566,8 @@ class WallxModelWrapper:
             [observation], [prefix_text], [postfix_text]
         )
 
+        # Legacy API fallback for inactive real joints. The model's shared
+        # flow helper applies the selected virtual endpoint policy.
         padding = (
             torch.zeros_like(
                 self.normalizer_action.delta[model_input["dataset_names"][0]]
@@ -580,15 +598,28 @@ class WallxModelWrapper:
             except Exception as e:
                 self.logger.warning("CUDA mem_get_info failed: %s", e)
 
+        rtc_kwargs = {}
+        if rtc_request is not None:
+            from wall_x.model.adapters.rtc_preprocessing import make_condition
+            rtc_kwargs["rtc_condition"] = make_condition(
+                rtc_request, self.normalizer_action, self.norm_key,
+                model_input["dof_mask"], self.config.action_horizon,
+                self.config.action_dim, model_input["input_ids"].device,
+            )
         with ScopeTimer("generate_flow_action"):
             model_output = self.model.generate_flow_action(
                 action_horizon=self.config.action_horizon,
                 action_dim=self.config.action_dim,
                 num_inference_timesteps=self.config.num_inference_timesteps,
                 padding_action=padding_action,
+                **rtc_kwargs,
                 **model_input,
             )
 
+        if b601_context is not None:
+            codec, anchor = b601_context
+            # generate_flow_action already unnormalizes. Add only the fixed anchor.
+            model_output["predict_action"] = codec.decode_model_commands(model_output["predict_action"], anchor)
         self.logger.info("flow action generation done")
 
         model_output["robot_state_action_data"] = observation["robot_state_action_data"]
@@ -609,6 +640,7 @@ class WallxModelWrapper:
             instructions
         ), "observations and instructions must have the same length"
         batch_size = len(observations)
+        b601_contexts = [self._b601_context(obs) for obs in observations]
 
         prefix_list = []
         postfix_list = []
@@ -622,6 +654,7 @@ class WallxModelWrapper:
             observations, prefix_list, postfix_list
         )
 
+        # The same model-side endpoint alignment applies to batched inference.
         padding_list = []
         for ds_name in batch_inputs["dataset_names"]:
             padding = (
@@ -649,6 +682,9 @@ class WallxModelWrapper:
         outputs = []
         for i in range(batch_size):
             single_action = predict_action[i : i + 1]
+            if b601_contexts[i] is not None:
+                codec, anchor = b601_contexts[i]
+                single_action = codec.decode_model_commands(single_action, anchor)
             single_output = {
                 "predict_action": single_action,
                 "robot_state_action_data": observations[i]["robot_state_action_data"],
@@ -661,6 +697,9 @@ class WallxModelWrapper:
         return outputs
 
     def infer_ar_action(self, observation, instruction):
+        from wall_x.data.b601 import codec_from_config
+        if codec_from_config(self.config.train_config) is not None:
+            raise ValueError("B601 v1 supports flow inference only")
         self.logger.info("generating ar action")
         self.logger.info(f"ar action instruction: {instruction}")
 
@@ -727,6 +766,9 @@ class WallxModelWrapper:
     def infer_dllm_action(
         self, observation, instruction, use_ar_action=False, dataset_name="x2_normal"
     ):
+        from wall_x.data.b601 import codec_from_config
+        if codec_from_config(self.config.train_config) is not None:
+            raise ValueError("B601 v1 supports flow inference only")
         assert self.model_type in ["qwen2_5"], "DLLM only supports qwen2_5"
         prefix_text, postfix_text = self.get_text_for_dllm_action(instruction)
         model_input = self.construct_model_input(

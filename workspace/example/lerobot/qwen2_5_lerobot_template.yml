@@ -59,8 +59,9 @@ distributed:
 data:
   dataset_type: lerobot
   lerobot_config:
-    repo_id: /path/to/your/lerobot_dataset
-    root: null
+    repo_id: my_dataset
+    root: /path/to/your/lerobot_dataset
+    split_mode: episode
   key_mappings:
     camera:
       observation.images.image: face_view

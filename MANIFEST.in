@@ -1,6 +1,54 @@
 include README.md
 include README.zh-CN.md
+include README.upstream.md
+include README.upstream.zh-CN.md
+include CONTRIBUTING.zh-CN.md
 include LICENSE
+include NOTICE.txt
 include requirements.txt
 include requirements-libero.txt
+include CONTRIBUTING.md
+include .github/ISSUE_TEMPLATE/bug_report.md
+include assets/QRcode_community.jpg
+include assets/libero_training_loss.png
+include assets/rebot_walloss05_rtc_comparison.mp4
+include assets/rebot_walloss05_rtc_comparison.jpg
+include assets/rebot_walloss05_padding_comparison.mp4
+include assets/rebot_walloss05_padding_comparison.jpg
+include scripts/README.md
+include workspace/README.md
+include workspace/TRAIN_ARRANGE_3_FLOWERS.md
+recursive-include workspace/example *.yml *.sh
+recursive-include workspace/data_config *.yml *.json
+recursive-include workspace/models_config *.json
+recursive-include workspace/rtx5090 *.md *.sh
+include workspace/rtx5090/env.example
+recursive-include docs *.md *.yml *.yaml
+include workspace/example/libero.yml
+include workspace/example/maniparena_example.yml
+include workspace/example/lerobot/qwen2_5_lerobot_template.yml
 recursive-include wall_x/model/core/ops/csrc *.cu *.cuh *.h
+recursive-include environments *.md *.yml *.txt
+include workspace/example/robotwin*.yml
+recursive-include deployment *.py *.toml *.md *.yml *.sh *.txt *.json
+include deployment/client/LICENSE
+include wallx
+recursive-include scripts *.py *.sh
+recursive-include tests *.py *.txt *.json *.yml *.yaml *.sha256
+prune experiments
+prune deployment/local
+prune deployment/client/build
+prune deployment/client/dist
+prune deployment/client/*.egg-info
+prune deployment/client/src/*.egg-info
+prune deployment/client/.venv
+prune deployment/client/.envs
+prune deployment/client/vendor
+prune workspace/local
+exclude workspace/rtx5090/local/env.sh
+exclude deployment/machines/*.local.yml
+exclude deployment/machines/local.yml
+global-exclude __pycache__ *.py[cod]
+prune .pytest_cache
+prune deployment/.pytest_cache
+prune deployment/client/.pytest_cache

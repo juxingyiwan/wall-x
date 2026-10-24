@@ -1,0 +1,19 @@
+# Source provenance and dependency notices
+
+Wall-X is distributed under the repository's Apache-2.0 license. This extension
+uses the public LeRobot 0.4.4, Seeed B601 driver 1.0.4 and MotorBridge 0.5.3
+interfaces; their distributions retain their own licenses and notices. Dependency
+wheels and copied dependency source trees are not redistributed here.
+
+The raw RTC queue follows the original-action leftover and consumption-bounded
+merge semantics of [LeRobot ActionQueue at b9cb121](https://github.com/huggingface/lerobot/blob/b9cb121cb7d4e3e26ec5c906d08dda68d151ba52/src/lerobot/policies/rtc/action_queue.py)
+and the last-action hold padding in its
+[RTC inference engine](https://github.com/huggingface/lerobot/blob/b9cb121cb7d4e3e26ec5c906d08dda68d151ba52/src/lerobot/rollout/inference/rtc.py).
+Those reference files are copyright HuggingFace Inc., Apache-2.0. This extension
+implements its NumPy queue separately and retains the existing Wall-X guidance;
+the unchanged wire v1's required taper is defined by the protocol implementation and its regression tests.
+The RTC client truncates or hold-pad only to the guidance horizon,
+matching `_normalize_prev_actions_length`; the model zero-pads the unguided tail
+after normalization, as in LeRobot's RTC processor. Updated v1 validation accepts
+compact prefixes and legacy full-horizon prefixes.
+This backport does not upgrade the pinned LeRobot 0.4.4 runtime dependency.

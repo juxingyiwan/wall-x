@@ -1,0 +1,8 @@
+# Shared interpreter bootstrap. Supply --name for the selected independent role.
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+variables:
+  PYTHONNOUSERSITE: "1"

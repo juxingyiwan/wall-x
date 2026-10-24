@@ -1,0 +1,6 @@
+# TEMPLATE for a new GPU host. Do not overwrite an existing machines/local.yml.
+checkpoint_root: ${HOME}/.cache/wallx-unified/checkpoints
+# Under Slurm, CUDA_VISIBLE_DEVICES is inherited. Do not override cuda_id.
+server:
+  host: 127.0.0.1
+  port: 32195

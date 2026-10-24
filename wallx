@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONNOUSERSITE=1
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+exec "${WALLX_PYTHON:-python}" "$root/deployment/cli.py" "$@"

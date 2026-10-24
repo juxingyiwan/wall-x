@@ -14,8 +14,8 @@ import logging
 import os
 import socket
 import sys
-import yaml
 import traceback
+
 import tyro
 
 from wall_x._vendor.harrix.serving.websocket_policy_server import WebsocketPolicyServer
@@ -33,13 +33,15 @@ def _server_model_config_to_infer_kwargs(model_config) -> dict:
 
 
 def get_wallx_policy(model_config, image_passing_mode, serialize_actions=True):
-    from wall_x._vendor.harrix.serving.policy.wall_x_policy import WallXPolicy
     from wall_x._vendor.harrix.serving._wallx_infer.infer_config import InferConfig
+    from wall_x._vendor.harrix.serving.policy.wall_x_policy import WallXPolicy
 
     config = InferConfig(**_server_model_config_to_infer_kwargs(model_config))
-    return WallXPolicy(config=config, image_passing_mode=image_passing_mode, serialize_actions=serialize_actions)
-
-
+    return WallXPolicy(
+        config=config,
+        image_passing_mode=image_passing_mode,
+        serialize_actions=serialize_actions,
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,8 @@ class ServerModelConfig:
     prompt_template: str | None = None
     qwen25_prompt_template: str | None = None
     prompt_priority_order: str | None = None
+    padding: str = "zero"  # zero: training-aligned; original: upstream normalization
+
 
 @dataclasses.dataclass
 class Args:
@@ -196,6 +200,17 @@ def create_policy(args: Args):
     policy = get_wallx_policy(
         model_config, args.image_passing_mode, args.serialize_actions
     )
+    from wall_x._vendor.harrix.serving.rtc import build_capability
+    policy.rtc_capability = build_capability(policy, enabled=(
+        args.env == EnvMode.X2ROBOT
+        and not args.serialize_actions
+        and args.max_batch_size is None
+        and not policy.config.smooth_action
+        and not args.enable_cuda_graph
+        and not args.enable_experimental_engine
+        and os.environ.get("ENABLE_CUDA_GRAPH", "false").lower() != "true"
+        and os.environ.get("ENABLE_EXPERIMENTAL_INFERENCE_ENGINE", "false").lower() != "true"
+    ))
     return policy
 
 

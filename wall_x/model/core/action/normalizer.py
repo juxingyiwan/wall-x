@@ -4,6 +4,7 @@ import logging
 import torch
 import torch.nn as nn
 
+from wall_x.inference_padding import apply_inference_padding, validate_padding
 from wall_x.utils.constant import _ACTION_KEY_FULL_MAPPING as _MODEL_KEY_TO_RAW_KEY
 
 logger = logging.getLogger(__name__)
@@ -123,6 +124,74 @@ def unnormalize_data_with_virtual_tail(normalizer, values, dataset_names, dof_ma
     )
     out[..., width:] = 0
     return out
+
+
+# Padding alignment: training normalizes real values before appending virtual
+# zeros. Enforce normalized zero even when checkpoint stats include padded slots.
+def zero_virtual_padding(values, channel_config):
+    """Zero only explicit ``action_padding`` slots in a tensor or ndarray.
+
+    LeRobot appends these slots after normalization. A zero mask can also
+    describe an unavailable real joint, so masks alone must not identify
+    virtual padding. Preserve real channels and never mutate the input.
+    """
+    if sum(int(size) for size in channel_config.values()) != values.shape[-1]:
+        raise ValueError("channel_config width must match the input width")
+    if "action_padding" not in channel_config:
+        return values
+    result = values.clone() if isinstance(values, torch.Tensor) else values.copy()
+    offset = 0
+    for channel, size in channel_config.items():
+        end = offset + int(size)
+        if channel == "action_padding":
+            result[..., offset:end] = 0
+        offset = end
+    return result
+
+
+# The mask is not an attention barrier: the full action vector is encoded
+# jointly, so a wrong virtual endpoint can affect real-joint outputs. Zero is
+# the clean endpoint, not the whole denoising trajectory: keep sampled noise
+# and the flow path from that noise to zero. Do not rewrite checkpoint stats.
+# The same policy is used by state preprocessing and native/RTC flow sampling.
+def build_flow_padding_action(
+    normalizer, dataset_names, dof_mask, dof_config, *, mode="zero"
+):
+    """Build normalized endpoints for inactive flow-action dimensions.
+
+    LeRobot's collator appends ``action_padding`` *after* normalization, so
+    its endpoint is normalized zero. Normalizing a raw zero with legacy
+    padded stats (min=0, delta=1) would instead produce -1. These dimensions
+    still enter the action encoder even though their loss is masked out.
+
+    Use the explicit channel layout to distinguish virtual padding from
+    missing real joints; missing real joints retain their normalizer's
+    existing raw-zero endpoint. ``mode="original"`` returns the upstream
+    normalization result before the virtual-zero correction. No checkpoint
+    statistics are modified.
+    """
+    mode = validate_padding(mode)
+    action_dim = dof_mask.shape[-1]
+    if sum(int(size) for size in dof_config.values()) != action_dim:
+        raise ValueError("dof_config width must match the flow-action mask")
+
+    batch_size = dof_mask.shape[0]
+    names = resolve_normalizer_dataset_names(
+        dataset_names, normalizer, batch_size, source="flow dataset_names"
+    )
+    padding = torch.zeros(
+        (batch_size, 1, action_dim), device=dof_mask.device, dtype=torch.float32
+    )
+    padding = normalize_data_with_virtual_tail(normalizer, padding, names, dof_mask)
+
+    offset = 0
+    for channel, size in dof_config.items():
+        end = offset + int(size)
+        if channel == "action_padding":
+            if dof_mask[..., offset:end].any():
+                raise ValueError("action_padding must be inactive in dof_mask")
+        offset = end
+    return apply_inference_padding(padding, dof_config, mode)
 
 
 def print_rank_last(message):
@@ -285,6 +354,18 @@ class Normalizer(nn.Module):
         new_xs = []
         dataset_names = [name for name in dataset_names if name != "x2_multimodal"]
         for x, dataset_name in zip(xs, dataset_names):
+            if getattr(self, "affine_fp32", False):
+                from wall_x.model.core.action.affine import scale
+
+                new_xs.append(
+                    scale(
+                        x,
+                        self.min[dataset_name],
+                        self.delta[dataset_name],
+                        clip=self.clip,
+                    )
+                )
+                continue
             delta = self.delta[dataset_name]
             delta = torch.where(delta == 0, torch.ones_like(delta), delta)
             x = (x - self.min[dataset_name]) / delta
@@ -299,6 +380,14 @@ class Normalizer(nn.Module):
         dataset_names = [name for name in dataset_names if name != "x2_multimodal"]
         dof_mask = dof_mask if dof_mask is not None else [None] * len(xs)
         for x, dataset_name, mask in zip(xs, dataset_names, dof_mask):
+            if getattr(self, "affine_fp32", False):
+                from wall_x.model.core.action.affine import unscale
+
+                lower, span = self.min[dataset_name], self.delta[dataset_name]
+                if mask is not None:
+                    lower, span = lower[mask[0].bool()], span[mask[0].bool()]
+                new_xs.append(unscale(x, lower, span))
+                continue
             x = (x + 1) / 2
             if mask is not None:
                 mask = mask[0].bool()

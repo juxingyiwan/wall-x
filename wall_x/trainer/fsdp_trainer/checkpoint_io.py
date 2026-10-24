@@ -14,6 +14,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import yaml
+from safetensors import safe_open
 from safetensors.torch import load_file, save_file
 from torch.distributed.checkpoint.state_dict import (
     StateDictOptions,
@@ -207,6 +208,19 @@ def _save_training_checkpoint_metadata(
     if grad_scaler is not None:
         torch.save(grad_scaler.state_dict(), os.path.join(ckpt_path, "grad_scaler.pt"))
 
+    data_section = _dict_section(config, "data")
+    backend = data_section.get("lerobot_config") or {}
+    if (
+        data_section.get("dataset_type") == "lerobot"
+        and backend.get("b601") is None
+        and backend.get("adapter") != "robotwin"
+    ):
+        import copy
+
+        config = copy.deepcopy(config)
+        config["data"].setdefault("lerobot_config", {}).setdefault(
+            "split_mode", "episode"
+        )
     with open(os.path.join(ckpt_path, "config.yml"), "w") as f:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
 
@@ -242,11 +256,13 @@ def _save_training_checkpoint_metadata(
         "qwen_vl_act_config_path"
     )
     if act_config_path is not None:
-        if os.path.exists(act_config_path):
+        if os.path.isdir(act_config_path):
+            act_config_path = os.path.join(act_config_path, "config.json")
+        if os.path.isfile(act_config_path):
             shutil.copy(act_config_path, os.path.join(ckpt_path, "config.json"))
             log_fn(f"[Checkpoint] Copied act config to {ckpt_path}/config.json")
         else:
-            log_fn(f"[Checkpoint] WARNING: {act_config_path} not found, skipping.")
+            raise FileNotFoundError(f"Model config not found: {act_config_path}")
 
     norm_stats_path = data_cfg.get("norm_stats_path") or config.get("norm_stats_path")
     if norm_stats_path is not None:
@@ -256,6 +272,9 @@ def _save_training_checkpoint_metadata(
         elif (data_cfg.get("dataset_type") or config.get("dataset_type")) == "lerobot":
             log_fn(f"[Checkpoint] WARNING: {norm_stats_path} not found, skipping.")
 
+    from wall_x.data.b601 import save_manifest
+
+    save_manifest(config, ckpt_path)
     torch.save(
         normalizer_action.state_dict(),
         os.path.join(ckpt_path, "normalizer_action.pth"),
@@ -426,38 +445,61 @@ _EMBED_WEIGHT_KEYS = (
 )
 
 
+def _resize_token_embeddings_to_vocab(
+    model: torch.nn.Module,
+    ckpt_vocab: int,
+    key: str,
+    log_fn: Optional[Callable] = None,
+) -> None:
+    """Match embedding size before weights are loaded or FSDP wraps the model."""
+    log_fn = log_fn or _noop_log
+    embed = (
+        model.get_input_embeddings() if hasattr(model, "get_input_embeddings") else None
+    )
+    if embed is None:
+        return
+    cur_vocab = embed.weight.shape[0]
+    if cur_vocab == ckpt_vocab:
+        return
+    log_fn(
+        f"resize_token_embeddings from {cur_vocab} to {ckpt_vocab} "
+        f"to match checkpoint ({key})"
+    )
+    if hasattr(model, "resize_token_embeddings"):
+        model.resize_token_embeddings(ckpt_vocab)
+    elif hasattr(model, "model") and hasattr(model.model, "resize_token_embeddings"):
+        model.model.resize_token_embeddings(ckpt_vocab)
+
+
 def _maybe_resize_token_embeddings_for_load(
     model: torch.nn.Module,
     state_dict: dict,
     log_fn: Optional[Callable] = None,
 ) -> None:
     """Resize model embeddings when checkpoint vocab size differs from the model."""
-    log_fn = log_fn or _noop_log
     for key in _EMBED_WEIGHT_KEYS:
-        if key not in state_dict:
-            continue
-        ckpt_vocab = state_dict[key].shape[0]
-        embed = (
-            model.get_input_embeddings()
-            if hasattr(model, "get_input_embeddings")
-            else None
-        )
-        if embed is None:
+        if key in state_dict:
+            _resize_token_embeddings_to_vocab(
+                model, state_dict[key].shape[0], key, log_fn
+            )
             return
-        cur_vocab = embed.weight.shape[0]
-        if cur_vocab == ckpt_vocab:
-            return
-        log_fn(
-            f"resize_token_embeddings from {cur_vocab} to {ckpt_vocab} "
-            f"to match checkpoint ({key})"
-        )
-        if hasattr(model, "resize_token_embeddings"):
-            model.resize_token_embeddings(ckpt_vocab)
-        elif hasattr(model, "model") and hasattr(
-            model.model, "resize_token_embeddings"
-        ):
-            model.model.resize_token_embeddings(ckpt_vocab)
+
+
+def prepare_model_for_checkpoint_resume(
+    model: torch.nn.Module,
+    checkpoint_path: str,
+    log_fn: Optional[Callable] = None,
+) -> None:
+    """Read only safetensors metadata and size embeddings before FSDP wrapping."""
+    path = os.path.join(checkpoint_path, "model.safetensors")
+    if not os.path.isfile(path):
         return
+    with safe_open(path, framework="pt", device="cpu") as checkpoint:
+        for key in _EMBED_WEIGHT_KEYS:
+            if key in checkpoint.keys():
+                ckpt_vocab = checkpoint.get_slice(key).get_shape()[0]
+                _resize_token_embeddings_to_vocab(model, ckpt_vocab, key, log_fn)
+                return
 
 
 def load_weights(
@@ -502,7 +544,7 @@ def load_weights(
     else:
         err = model.load_state_dict(filtered_state_dict, strict=False)
 
-    log_fn(f"err in load model: {err}")
+    log_fn(f"Model weight load status (strict=False): {err}")
     return model
 
 
@@ -812,8 +854,7 @@ def _load_fsdp2_or_dmuon_full(
                     options=options,
                 )
                 log_fn(
-                    "[Checkpoint] FSDP2 optimizer state loaded "
-                    "(reshard via broadcast)."
+                    "[Checkpoint] FSDP2 optimizer state loaded (reshard via broadcast)."
                 )
         except (ValueError, RuntimeError, TypeError, KeyError) as e:
             # Most likely a legacy FSDP1 consolidated OSD (flat_param-specific).

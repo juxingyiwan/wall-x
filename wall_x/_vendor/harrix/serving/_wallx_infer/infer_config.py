@@ -73,7 +73,11 @@ class InferConfig:
         model_type: str = "wallx",  # ["wallx", "vga"]
         smooth_action: bool = False,
         smooth_gripper: bool = True,
+        padding: str = "zero",
     ):
+        from wall_x.inference_padding import validate_padding
+
+        self.padding = validate_padding(padding)
         # Private attributes for paths
         assert checkpoint_path is not None
         from wall_x._vendor.harrix.utils.ckpt_load import resolve_checkpoint_dir
@@ -84,7 +88,10 @@ class InferConfig:
                 "Serving requires a directory containing model.safetensors and "
                 "normalizer_action.pth / normalizer_propri.pth (or norm_stats.json)."
             )
-        self._checkpoint_path = resolve_checkpoint_dir(checkpoint_path)
+        from wall_x.checkpoint_weights import resolve_checkpoint_weights
+        selected = checkpoint_path if os.path.isfile(checkpoint_path) else resolve_checkpoint_dir(checkpoint_path)
+        self.checkpoint_weights = str(resolve_checkpoint_weights(selected))
+        self._checkpoint_path = os.path.dirname(self.checkpoint_weights)
         action_pth = os.path.join(self._checkpoint_path, "normalizer_action.pth")
         propri_pth = os.path.join(self._checkpoint_path, "normalizer_propri.pth")
         if os.path.exists(action_pth):
@@ -167,7 +174,11 @@ class InferConfig:
     def checkpoint_path(self, value: str | None):
         """Reload all configs when checkpoint_path is updated"""
         if self._checkpoint_path != value:
-            self._checkpoint_path = value
+            from wall_x._vendor.harrix.utils.ckpt_load import resolve_checkpoint_dir
+            from wall_x.checkpoint_weights import resolve_checkpoint_weights
+            selected = value if os.path.isfile(value) else resolve_checkpoint_dir(value)
+            self.checkpoint_weights = str(resolve_checkpoint_weights(selected))
+            self._checkpoint_path = os.path.dirname(self.checkpoint_weights)
             self._load_all_configs()
 
     @property

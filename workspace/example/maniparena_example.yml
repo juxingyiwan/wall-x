@@ -95,8 +95,9 @@ distributed:
 data:
   dataset_type: lerobot
   lerobot_config:
-    repo_id: /path/to/cvpr_4tasks
-    root: null
+    repo_id: maniparena
+    root: /path/to/cvpr_4tasks
+    split_mode: episode
   key_mappings:
     camera:
       observation.images.faceImg: face_view

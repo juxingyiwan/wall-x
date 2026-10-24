@@ -1,0 +1,11 @@
+# Install from the repository root. Preserve the established ReBot dependency set.
+-r lerobot-model.txt
+-c ../constraints/rebot-linux-py310-cu128.txt
+# The independently installable client owns hardware, vision and test dependencies.
+./deployment/client[dev,vision,hardware]
+# Direct runtime and build/support tools not declared by the shared model/client.
+einops==0.8.2
+pip==26.2.1
+wheel==0.47.0
+pre-commit==4.5.1
+conda-pack==0.8.1

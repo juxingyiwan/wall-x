@@ -1,0 +1,4 @@
+include LICENSE NOTICE.txt
+recursive-include src/wallx_client/configs *.yml
+recursive-include docs *.json
+recursive-include tests *.py *.json

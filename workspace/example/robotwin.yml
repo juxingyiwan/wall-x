@@ -1,0 +1,117 @@
+# RoboTwin clean smoke: 4 GPUs x 1 sample x 4 accumulation = global batch 16.
+# Replace /path/to placeholders. See docs/robotwin.md.
+model_type: qwen2_5
+
+task:
+  # Dual-arm 6D relative action: 10 + 10 = 20, plus action_padding(6) = 26.
+  dof_config:
+    follow_left_ee_cartesian_pos_relative: 3
+    follow_left_ee_rotation_6D_relative: 6
+    follow_left_gripper: 1
+    follow_right_ee_cartesian_pos_relative: 3
+    follow_right_ee_rotation_6D_relative: 6
+    follow_right_gripper: 1
+    action_padding: 6
+  ar_dof_config:
+    follow_left_ee_cartesian_pos_relative: 3
+    follow_left_ee_rotation_6D_relative: 6
+    follow_left_gripper: 1
+    follow_right_ee_cartesian_pos_relative: 3
+    follow_right_ee_rotation_6D_relative: 6
+    follow_right_gripper: 1
+    action_padding: 6
+  agent_pos_config:
+    follow_left_ee_cartesian_pos: 3
+    follow_left_ee_rotation_6D: 6
+    follow_left_gripper: 1
+    follow_right_ee_cartesian_pos: 3
+    follow_right_ee_rotation_6D: 6
+    follow_right_gripper: 1
+    action_padding: 6
+  action_horizon: 32
+  action_horizon_flow: 32
+  use_state_string_representation: false
+
+model:
+  backbone: qwen2_5
+  config_path: /path/to/wall-oss-0.5/config.json
+  processor_path: /path/to/Qwen2.5-VL-3B-Instruct
+  pretrained_path: null
+  attn_deterministic: true
+  use_ema: false
+  flow_loss_weight: 1.0
+  ar_loss_weight: 0.01
+
+hyperparams:
+  num_epoch: 100
+  batch_size_per_gpu: 1
+  gradient_accumulation_steps: 4
+  seed: 10222
+  optimizer:
+    optimizer_type: adamw
+    learning_rate: 5.0e-05
+    max_grad_norm: 1.0
+    enable_grad_clip: true
+    betas: [0.9, 0.95]
+    weight_decay: 1.0e-8
+    eps: 1.0e-8
+  scheduler:
+    scheduler_type: cosine
+    num_warmup_steps: 20
+    num_training_steps: 200
+    min_lr: 1.0e-6
+
+distributed:
+  use_fsdp: true
+  use_mixed_precision: true
+  bf16: true
+
+data:
+  dataset_type: lerobot
+  lerobot_config:
+    adapter: robotwin
+    normalization:
+      clip_action_targets: false
+      clip_state_inputs: false
+    pad_to_square: true
+    repo_id: robotwin_clean
+    root: /path/to/robotwin_clean
+  key_mappings:
+    camera:
+      observation.images.face_view: face_view
+      observation.images.left_wrist_view: left_wrist_view
+      observation.images.right_wrist_view: right_wrist_view
+    state: observation.state
+    action: action
+  norm_stats_path: /path/to/robotwin_clean_norm_stats.json
+  episode_split_path: /path/to/robotwin_clean/meta/episode_split.json
+  train_test_split: 0.95
+  num_workers: 2
+  max_length: 1024
+  # Preserve aspect ratio and center-pad each view to 224 x 224.
+  resolution:
+    face_view: 224
+    left_wrist_view: 224
+    right_wrist_view: 224
+
+logging:
+  log_name: robotwin_ft
+  log_project: lerobot_robotwin_ft
+  log_entity: your_wandb_entity
+  use_wandb: false
+  log_interval: 10
+  save_on_completed_steps: true
+  save_interval: 200
+  # Validation retains the historical zero-based cadence.
+  val_interval: 199
+  epoch_save_interval: 100
+
+checkpoint:
+  save_path: /path/to/robotwin_clean
+  # Single-file .safetensors loads as pretrain weights before FSDP wrapping.
+  # Use a checkpoint directory for full resume (optimizer / scheduler / RNG).
+  resume_from: /path/to/wall-oss-0.5/model.safetensors
+
+debug:
+  profile: false
+  nvtx: false

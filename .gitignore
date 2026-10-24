@@ -28,6 +28,8 @@ ckpt/
 *.pth
 *.safetensors
 *.mp4
+!/assets/rebot_walloss05_rtc_comparison.mp4
+!/assets/rebot_walloss05_padding_comparison.mp4
 
 # Editor / OS noise
 .DS_Store
@@ -40,3 +42,29 @@ workspace/rtx5090/local/env.sh
 #   wall_x/model/core/ops/csrc/
 #   wall_x/model/core/ops/_cuda_ext.py
 #   wall_x/model/core/ops/_cuda_wrappers.py
+
+# Maintenance checkout: keep experiment artifacts and local dependency copies out
+/work/
+/third_party/
+/lerobot/
+/MUJOCO_LOG.TXT
+/experiments/
+/docs/releases/
+/docs/validation/2026-10-11-deployment.md
+
+# ReBot v0.2.0: local runtime overrides and checkpoint optimizer tensors
+/workspace/local/
+*.pt
+.env
+*.pem
+*.key
+
+# Scenario-specific deployment overrides and host-compiled operators.
+/.unification/
+/deployment/machines/*.local.yml
+/deployment/machines/local.yml
+/deployment/local/
+/snapshot-hashes.json
+/wall_x/model/core/ops/_cuda_ext_bin*.so
+*.whl
+*.npz

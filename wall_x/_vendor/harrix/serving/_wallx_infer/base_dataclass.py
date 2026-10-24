@@ -455,9 +455,10 @@ class RobotStateActionData:
                 dof_start += dof_dim
                 continue
 
+            configured_dim = self.config.train_config.get("dof_config", {}).get(action_key)
             action_key = action_key.replace("follow_", "")
             action_key = action_key.replace("master_", "")
-            dof_dim = dof_dims[action_key]
+            dof_dim = configured_dim if configured_dim is not None else dof_dims[action_key]
             action_key = f"action_{action_key}"
             self.data[action_key] = predict_action[:, dof_start : dof_start + dof_dim]
             dof_start += dof_dim

@@ -1,0 +1,41 @@
+# TEMPLATE: copy to deployment/local/client.yml only for a new installation.
+# The active profile's client_config selects the file that is actually loaded.
+# Keep task, control and camera timing here; device paths/endpoints belong in machines/.
+# task must be the full instruction used to train the selected checkpoint.
+task: Describe the task used to train your checkpoint
+output_root: ${HOME}/.cache/wallx-unified/rollouts
+display_data: true
+save_rollout: true
+policy:
+  uri: ws://127.0.0.1:32195  # Overridden by the selected machine's service endpoint.
+  connect_timeout_s: 10
+  request_timeout_s: 15
+  jpeg_quality: 95
+robot:
+  min_temperature_c: -25.0
+  temperature_feedback_grace_s: 0.5  # Brief below-minimum feedback; 0 rejects immediately.
+  camera_buffer_size: 2
+  camera_recovery_timeout_s: 1.0  # Recovery window after a transient camera gap.
+  camera_max_consecutive_failures: 3
+  camera_max_reopens: 3
+control:
+  hz: 30
+  execution_horizon: 16  # Execute this many actions from each 32-step prediction.
+  duration_s: 300       # Episode budget; explicit CLI --duration overrides this.
+  max_policy_chunks: 100000
+  max_tick_s: 0.15
+  max_response_age_s: 2  # RTC preflight only.
+  max_state_drift_arm_deg: 2  # RTC only.
+  max_state_drift_gripper_deg: 15  # RTC only.
+  settle_gripper_deg: 3  # Startup/shutdown gripper arrival tolerance.
+  startup_home: true
+  startup_gripper_speed_deg_s: 60
+rtc:
+  enabled: false
+  guidance_mode: lerobot
+  max_guidance: 10.0
+shutdown:
+  home_timeout_s: 65
+  arm_tolerance_deg: 2
+  settle_s: 0.25
+  feedback_recovery_timeout_s: 1.0

@@ -124,7 +124,9 @@ def resolve_task_info(task_suite, task_id: int) -> tuple[str, Any]:
     if task_id < 0 or task_id >= num_tasks:
         raise ValueError(f"invalid task_id={task_id}, num_tasks={num_tasks}")
     task = task_suite.get_task(task_id)
-    return task.language, task_suite.get_task_init_states(task_id)
+    from wall_x._vendor.harrix.envs.libero_state_io import load_task_initial_states
+
+    return task.language, load_task_initial_states(task_suite, task_id)
 
 
 def pick_initial_state(

@@ -1,11 +1,13 @@
-# LIBERO single-arm finetune example (Euler delta action, 256px, 2 cameras).
+# LIBERO Wall-OSS finetune: 8 GPUs x batch 16 x accumulation 1 = global batch 128.
+# 30,000-step schedule; reported evaluation uses the 25,000-update checkpoint.
+# New runs use episode splitting; see docs/libero.md for the historical protocol.
 #
 # Replace every /path/to/* placeholder before training:
 #
-#   model.config_path           -> model architecture JSON (mot_flash_mask_causal_xloss.json)
+#   model.config_path           -> Wall-OSS architecture JSON (config.json)
 #   model.processor_path        -> Qwen2.5-VL-3B-Instruct directory
-#   model.pretrained_path       -> same as processor_path, or HuggingFace cache path
-#   data.lerobot_config.repo_id -> local LeRobot dataset root (libero_all)
+#   model.pretrained_path       -> null when loading complete Wall-OSS weights
+#   data.lerobot_config.root    -> local LeRobot dataset root (libero_all)
 #   data.norm_stats_path        -> q01/q99 normalization JSON
 #   checkpoint.save_path        -> writable directory for training checkpoints
 #   checkpoint.resume_from      -> Wall-OSS-0.5 pretrained .safetensors or checkpoint directory
@@ -54,7 +56,7 @@ model:
   backbone: qwen2_5
   config_path: /path/to/wall-oss-0.5/config.json
   processor_path: /path/to/Qwen2.5-VL-3B-Instruct
-  pretrained_path: /path/to/Qwen2.5-VL-3B-Instruct
+  pretrained_path: null
   attn_deterministic: true
   use_ema: false
   flow_loss_weight: 1.0
@@ -62,11 +64,12 @@ model:
 
 hyperparams:
   num_epoch: 100
-  batch_size_per_gpu: 4
-  gradient_accumulation_steps: 4
+  batch_size_per_gpu: 16
+  gradient_accumulation_steps: 1
   seed: 10222
   optimizer:
     optimizer_type: adamw
+    train_action_expert_only: false
     learning_rate: 5.0e-05
     max_grad_norm: 1.0
     enable_grad_clip: true
@@ -76,7 +79,7 @@ hyperparams:
   scheduler:
     scheduler_type: cosine
     num_warmup_steps: 1000
-    num_training_steps: 200000
+    num_training_steps: 30000
     min_lr: 1.0e-6
 
 distributed:
@@ -87,13 +90,14 @@ distributed:
 data:
   dataset_type: lerobot
   lerobot_config:
-    repo_id: /path/to/libero_all
-    root: null
+    repo_id: libero_all
+    root: /path/to/libero_all
+    split_mode: episode
   key_mappings:
-    # libero_all v3.0 only has faceImg + rightImg (no leftImg).
+    # Pinned lerobot/libero uses image + image2; verify meta/info.json for other exports.
     camera:
-      observation.images.faceImg: face_view
-      observation.images.rightImg: right_wrist_view
+      observation.images.image: face_view
+      observation.images.image2: right_wrist_view
     state: observation.state
     action: action
   norm_stats_path: /path/to/libero_all_norm_stats.json
@@ -107,12 +111,12 @@ data:
 logging:
   log_name: libero_ft
   log_project: lerobot_libero_ft
-  log_entity: your_wandb_entity
-  use_wandb: true
+  log_entity: null
+  use_wandb: false
   log_interval: 10
-  save_interval: 2000
+  save_interval: 5000
   val_interval: 1000000
-  epoch_save_interval: 1
+  epoch_save_interval: 1000000
 
 checkpoint:
   save_path: /path/to/libero

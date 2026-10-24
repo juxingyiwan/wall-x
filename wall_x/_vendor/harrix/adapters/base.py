@@ -33,6 +33,15 @@ class BaseInferAdapter(ABC):
     def action_mode(self) -> str:
         """Configured inference algorithm, fixed at construction time."""
 
+    def model_rtc_capability(self):
+        """Model support only; excludes environment units, dimensions and rates."""
+        from wall_x.model.core.action.rtc_contract import ModelRTCCapability
+
+        return ModelRTCCapability()
+
+    def supports_rtc(self) -> bool:
+        return self.model_rtc_capability().supported
+
     @abstractmethod
     def predict_batch(self, payloads: list[dict]) -> list[np.ndarray]:
         """Run one batched inference call and return one chunk per payload.
@@ -47,5 +56,9 @@ class BaseInferAdapter(ABC):
                 "noise":       np.ndarray | None,
                     # Flow may pass (chunk_horizon, action_dim); other modes
                     # may leave this as None.
+                "rtc_condition": RTCCondition | None,
+                    # Optional capability: normalized model-space [1,H,D]
+                    # prefix and [1,H,1] weights, not a serving wire request.
+                    # Use model.adapters.rtc_preprocessing for raw actions.
             }
         """

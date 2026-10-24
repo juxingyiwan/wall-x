@@ -1,0 +1,35 @@
+# Simulator environment ONLY. Keep Wall-X training/model inference on lerobot-model.txt.
+# Install torch==2.4.1 and torchvision==0.19.1 with the matching CUDA wheel first.
+numpy==1.26.4
+sapien==3.0.0b1
+mplib==0.2.1
+scipy==1.10.1
+transforms3d==0.4.2
+gymnasium==0.29.1
+trimesh==4.4.3
+open3d==0.18.0
+imageio==2.34.2
+imageio-ffmpeg
+opencv-python==4.10.0.84
+h5py
+pyyaml
+yourdfpy
+networkx<3.5
+warp-lang==1.2.1
+pyglet<2
+zarr<3
+moviepy<2
+termcolor
+av
+matplotlib
+toppra
+einops
+ninja
+setuptools==80.9.0
+setuptools-scm>=6.2
+pybind11
+numpy-quaternion==2023.0.4
+importlib-resources
+scikit-image==0.24.0
+tqdm
+wheel

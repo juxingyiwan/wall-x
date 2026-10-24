@@ -12,6 +12,8 @@ from typing import Callable, Optional
 import torch
 from safetensors.torch import load_file
 
+from wall_x.checkpoint_weights import resolve_checkpoint_weights
+
 
 def _noop_log(_msg: str, **_kw) -> None:
     pass
@@ -93,20 +95,13 @@ def load_state_dict(checkpoint_path: str, model_class) -> dict:
     If the model class reports that the state dict is not fused, it is converted
     through ``model_class.convert_to_fused``.
     """
-    fsdp_ckpt = os.path.join(checkpoint_path, "pytorch_model_fsdp.bin")
-    safetensor_ckpt = os.path.join(checkpoint_path, "model.safetensors")
-
-    if os.path.exists(fsdp_ckpt):
-        state_dict = torch.load(fsdp_ckpt, map_location="cpu")
+    weights = resolve_checkpoint_weights(checkpoint_path)
+    if weights.suffix == ".safetensors":
+        state_dict = load_file(str(weights), device="cpu")
+    else:
+        state_dict = torch.load(weights, map_location="cpu")
         if isinstance(state_dict, dict) and "state_dict" in state_dict:
             state_dict = state_dict["state_dict"]
-    elif os.path.exists(safetensor_ckpt):
-        state_dict = load_file(safetensor_ckpt, device="cpu")
-    else:
-        raise FileNotFoundError(
-            "checkpoint contains neither pytorch_model_fsdp.bin nor model.safetensors: "
-            f"{checkpoint_path}"
-        )
 
     if not model_class.is_fused(state_dict):
         state_dict = model_class.convert_to_fused(state_dict)
@@ -137,7 +132,10 @@ def resolve_checkpoint_dir(checkpoint_path: str) -> str:
     root or a concrete step directory.
     """
     if os.path.isfile(checkpoint_path):
-        checkpoint_path = os.path.dirname(checkpoint_path)
+        raise ValueError(
+            "An explicit weight file must be passed directly to load_state_dict "
+            "or resolve_checkpoint_weights; reducing it to a directory loses the selection."
+        )
 
     if _dir_has_weights(checkpoint_path):
         return checkpoint_path
@@ -155,7 +153,7 @@ def resolve_checkpoint_dir(checkpoint_path: str) -> str:
         candidates.append((sort_step, os.path.getmtime(sub), sub))
 
     if not candidates:
-        return checkpoint_path
+        raise FileNotFoundError(f"No model weights in {checkpoint_path} or its children")
 
     candidates.sort()
     resolved = candidates[-1][2]

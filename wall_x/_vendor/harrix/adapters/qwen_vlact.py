@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import copy
 import logging
+import os
 
 import numpy as np
 import torch
@@ -36,10 +37,13 @@ from wall_x._vendor.harrix.utils.train_config import (
     load_train_config_with_ckpt_overlay,
     normalize_train_config_for_inference,
     register_data_backend,
+    resolve_agent_pos_config,
     resolve_state_bins,
     resolve_use_state_string_representation,
 )
 from wall_x.trainer.trainer_utils import load_wallx_processors
+from wall_x.model.core.action.normalizer import zero_virtual_padding
+from wall_x.inference_padding import apply_inference_padding, validate_padding
 
 
 _SUPPORTED_MODES = {"flow", "ar", "dllm", "vqa", "subtask"}
@@ -119,11 +123,18 @@ class QwenVLActInferAdapter(BaseInferAdapter):
                 f"{sorted(_IMPLEMENTED_MODES)}"
             )
         self._action_mode = mode
+        self._padding = validate_padding(cfg.model.padding)
 
         ta = self._training_adapter()
         device = "cuda"
         self._device = device
-        self._checkpoint_path = resolve_checkpoint_dir(cfg.model.checkpoint_path)
+        from wall_x.checkpoint_weights import resolve_checkpoint_weights
+
+        selected = cfg.model.checkpoint_path
+        if not os.path.isfile(selected):
+            selected = resolve_checkpoint_dir(selected)
+        self._checkpoint_weights = resolve_checkpoint_weights(selected)
+        self._checkpoint_path = str(self._checkpoint_weights.parent)
 
         # 1) train_config with checkpoint overlays, then data backend registration.
         train_config = load_train_config_with_ckpt_overlay(
@@ -175,11 +186,12 @@ class QwenVLActInferAdapter(BaseInferAdapter):
         ModelClass = ta.inference_model_class()
         self._model_class = ModelClass
         model = ModelClass(self._model_config, self._processor, self._tokenizer_mixin)
+        model.inference_padding = self._padding
         model.resize_token_embeddings(len(self._processor.tokenizer))
         model.to_bfloat16_for_selected_params()
 
         # 7) checkpoint weights and model finalization.
-        state_dict = load_state_dict(self._checkpoint_path, ModelClass)
+        state_dict = load_state_dict(str(self._checkpoint_weights), ModelClass)
         embed_key = "model.embed_tokens.weight"
         if embed_key in state_dict:
             ckpt_vocab = state_dict[embed_key].shape[0]
@@ -224,7 +236,20 @@ class QwenVLActInferAdapter(BaseInferAdapter):
     def action_mode(self) -> str:
         return self._action_mode
 
+    def model_rtc_capability(self):
+        if self._action_mode == "flow" and callable(
+            getattr(self._model, "model_rtc_capability", None)
+        ):
+            return self._model.model_rtc_capability()
+        return super().model_rtc_capability()
+
     def predict_batch(self, payloads: list[dict]) -> list[np.ndarray]:
+        for payload in payloads:
+            if payload.get("rtc") is not None:
+                raise ValueError("Use model-space rtc_condition, not a serving rtc request")
+            condition = payload.get("rtc_condition")
+            if condition is not None:
+                self.model_rtc_capability().validate(condition, batch_size=len(payloads))
         if self._action_mode == "flow":
             return self._flow_batch(payloads)
         raise NotImplementedError(
@@ -259,7 +284,7 @@ class QwenVLActInferAdapter(BaseInferAdapter):
                     "payload noise must be provided for every payload or for none"
                 )
             batch_noise = torch.stack(
-                [torch.from_numpy(n).to(dtype=torch.float32) for n in noises], dim=0
+                [torch.as_tensor(n) for n in noises], dim=0
             )
         else:
             batch_noise = None
@@ -274,7 +299,9 @@ class QwenVLActInferAdapter(BaseInferAdapter):
             observations, prefix_list, postfix_list
         )
 
-        # 4) Normalized zero action as the flow starting point.
+        # 4) Caller fallback for inactive real dimensions. The model rebuilds
+        # selected virtual endpoints via build_flow_padding_action; the flow
+        # starting point remains noise in both policies.
         padding = torch.zeros(
             (
                 len(batch_inputs["dataset_names"]),
@@ -288,12 +315,16 @@ class QwenVLActInferAdapter(BaseInferAdapter):
         ).to(batch_inputs["input_ids"].device)
 
         # 5) Flow forward.
+        rtc_kwargs = {}
+        if payloads[0].get("rtc_condition") is not None:
+            rtc_kwargs["rtc_condition"] = payloads[0]["rtc_condition"]
         model_output = self._model.generate_flow_action(
             action_horizon=self._action_horizon,
             action_dim=self._action_dim,
             num_inference_timesteps=self._num_inference_timesteps,
             padding_action=padding_action,
             noise=batch_noise,
+            **rtc_kwargs,
             **batch_inputs,
         )
 
@@ -366,6 +397,13 @@ class QwenVLActInferAdapter(BaseInferAdapter):
         agent_pos = _normalize_real_prefix(
             self._normalizer_propri, agent_pos, dataset_names
         )
+        # Share serving's policy; layout, not stats width, identifies virtual
+        # channels. Value policy never changes the mask or missing real joints.
+        state_layout = resolve_agent_pos_config(self._train_config)
+        agent_pos = apply_inference_padding(
+            agent_pos, state_layout, getattr(self, "_padding", "zero")
+        )
+        agent_pos_mask = zero_virtual_padding(agent_pos_mask, state_layout)
 
         # Resize images per sample.
         image_inputs: list[torch.Tensor] = []

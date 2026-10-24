@@ -1,0 +1,38 @@
+.venv/
+.envs/
+.venv-py312-backup*/
+# Keep only the two reproducible robot install wheels and provenance.
+vendor/*
+!vendor/README.md
+!vendor/*-source-manifest.json
+!vendor/licenses/
+!vendor/wheels/
+vendor/wheels/*
+!vendor/wheels/lerobot-0.4.4-py3-none-any.whl
+!vendor/wheels/lerobot_robot_seeed_b601-1.0.4-py3-none-any.whl
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+outputs/
+*.npz
+*.avi
+*.mp4
+.env
+*.pem
+*.key
+environment-freeze*.txt
+environment-install.log
+environment-align*.log
+environment-align*.json
+validation-*.log
+validation-*.json
+
+# The reviewed baseline is a release input; other freezes remain local.
+!deploy/environment-freeze.txt
+
+# The active environment entry is a symlink, not a directory.
+.venv

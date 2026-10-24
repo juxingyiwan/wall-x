@@ -125,17 +125,18 @@ class ActionProcessor(nn.Module):
             dof_mask: [batch_size, action_dim]
         """
         with torch.autocast("cuda", dtype=torch.float32):
+            # With FSDP CPU offload, the sharded weight rests on CPU between
+            # calls, but the layer's pre-forward hook gathers it onto CUDA.
+            # Keep CUDA input on CUDA in that case and align the mask with it.
+            proj_device = self.propri_proj.weight.device
+            if proj_device.type == "cpu" and proprioception.is_cuda:
+                proj_device = proprioception.device
             proprioception = proprioception.to(
-                device=self.propri_proj.weight.device
-            ).to(dtype=self.propri_proj.weight.dtype)
-            if dof_mask is not None:
-                if self.config.proj_with_mask:
-                    proprioception = torch.cat(
-                        [proprioception, dof_mask], dim=-1
-                    )  # .unsqueeze(1)
-            proprioception = proprioception.to(
-                device=self.propri_proj.weight.device
-            ).to(dtype=self.propri_proj.weight.dtype)
+                device=proj_device, dtype=self.propri_proj.weight.dtype
+            )
+            if dof_mask is not None and self.config.proj_with_mask:
+                dof_mask = dof_mask.to(device=proj_device, dtype=proprioception.dtype)
+                proprioception = torch.cat([proprioception, dof_mask], dim=-1)
             proprio_embed = self.propri_proj(
                 proprioception
             )  # [batch_size, 1, state_hidden_size]

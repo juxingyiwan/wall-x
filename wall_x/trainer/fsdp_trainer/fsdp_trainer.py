@@ -3,6 +3,7 @@
 import contextlib
 import dataclasses
 import gc
+import json
 import logging
 import os
 import time
@@ -81,6 +82,8 @@ class FSDPTrainer(DistributedTrainer):
         # constant scheduler too once the field is set.
         sched = self.cfg.hyperparams.scheduler
         self.num_training_steps = int(getattr(sched, "num_training_steps", 0) or 0)
+        if self.cfg.hyperparams.max_optimizer_steps:
+            self.num_training_steps = self.cfg.hyperparams.max_optimizer_steps
         self.metrics_logger = MetricsLogger(
             wandb_run=self.wandb_run,
             log_interval=self.log_interval,
@@ -94,6 +97,10 @@ class FSDPTrainer(DistributedTrainer):
         self.load_normalizer()
         self.load_processor()
         self.load_model()
+        if self._resume_from_training_checkpoint():
+            _ckpt_io.prepare_model_for_checkpoint_resume(
+                self.model, self.cfg.checkpoint.resume_from, log_fn=self.log
+            )
 
         # DDP needs to see correct requires_grad at wrap time, so freeze first.
         self._freeze_params_if_needed(self.model)
@@ -292,8 +299,7 @@ class FSDPTrainer(DistributedTrainer):
         if lr_group_configs:
             if opt_cfg.optimizer_type not in ("adamw", "muon", "dmuon"):
                 raise ValueError(
-                    "optimizer.lr_groups are only supported with adamw, muon, "
-                    "or dmuon"
+                    "optimizer.lr_groups are only supported with adamw, muon, or dmuon"
                 )
             base_group_name = (
                 "base_lr_group" if uses_legacy_action_lr_groups(opt_cfg) else "base"
@@ -395,7 +401,13 @@ class FSDPTrainer(DistributedTrainer):
             )
             # global_step records completed steps, so resume from the next step
             # to avoid triggering _should_save_checkpoint() immediately.
-            self.global_step += 1
+            if not train_state.get("completed_updates", False):
+                self.global_step += 1
+            self._resume_batch_offset = (
+                train_state.get("batches_consumed", 0)
+                if self.cfg.data.dataset_type == "lerobot"
+                else 0
+            )
         (
             self.dataset,
             self.train_dataloader,
@@ -419,6 +431,10 @@ class FSDPTrainer(DistributedTrainer):
         total = len(self.train_dataloader)
         # Drop last
         stop_step = total - total % self.grad_accum_steps
+        if stop_step == 0:
+            raise ValueError("Training DataLoader has no complete optimizer update")
+        self._epoch_complete = False
+        self._batches_consumed = 0
 
         # Disable automatic GC to prevent random ~200ms stalls during compute
         gc_interval = self.cfg.logging.gc_interval_steps
@@ -430,6 +446,10 @@ class FSDPTrainer(DistributedTrainer):
             self.timers("data-load", log_level=0).start(barrier=True)
 
             for i, batch in enumerate(self.train_dataloader, self.initial_step):
+                if i < getattr(self, "_resume_batch_offset", 0):
+                    continue
+                if i >= stop_step:
+                    break
                 self.timers("data-load").stop()
 
                 # Save first batch for offline profiling (rank 0 only)
@@ -554,6 +574,12 @@ class FSDPTrainer(DistributedTrainer):
                             level=logging.INFO,
                         )
 
+                    # Count completed updates before saving, including the final update.
+                    self.global_step += 1
+                    self.micro_step = 0
+                    self._batches_consumed = i + 1
+                    self._epoch_complete = self._batches_consumed >= stop_step
+
                     # Checkpoint saving (FSDP full state_dict can take 10-20s every save_interval steps)
                     if self._should_save_checkpoint():
                         _t_save_start = time.time()
@@ -567,9 +593,6 @@ class FSDPTrainer(DistributedTrainer):
                     # Validation
                     if self._should_validate():
                         self.val_loop()
-
-                    self.global_step += 1
-                    self.micro_step = 0
 
                     # Manual GC outside timing window to avoid random stalls (can add 1-5s every gc_interval_steps)
                     if self.global_step % gc_interval == 0:
@@ -587,7 +610,7 @@ class FSDPTrainer(DistributedTrainer):
                 self.timers("interval-time").stop()
 
                 # Drop last
-                if i == stop_step:
+                if i + 1 >= stop_step:
                     break
 
                 if not isinstance(profiler, contextlib.nullcontext):
@@ -607,6 +630,7 @@ class FSDPTrainer(DistributedTrainer):
         # Re-enable automatic GC after training loop
         gc.enable()
 
+        self._resume_batch_offset = 0
         # Reset dataloader for next epoch
         self.train_dataloader = self.dataset.get_train_dataloader()
 
@@ -769,8 +793,17 @@ class FSDPTrainer(DistributedTrainer):
     def _should_save_checkpoint(self) -> bool:
         """Check if checkpoint should be saved"""
         log = self.cfg.logging
+        if self.cfg.hyperparams.max_optimizer_steps:
+            completed = self.global_step
+            return (
+                log.save_interval > 0
+                and completed >= log.ignore_until_interval
+                and completed % log.save_interval == 0
+                and completed < self.cfg.hyperparams.max_optimizer_steps
+            )
         return (
-            self.global_step >= log.ignore_until_interval
+            log.save_interval > 0
+            and self.global_step >= log.ignore_until_interval
             and self.global_step % log.save_interval == 0
             and self.global_step != 0
         )
@@ -779,7 +812,8 @@ class FSDPTrainer(DistributedTrainer):
         """Check if validation should be performed"""
         log = self.cfg.logging
         return (
-            self.global_step >= log.ignore_until_interval
+            log.val_interval > 0
+            and self.global_step >= log.ignore_until_interval
             and self.global_step % log.val_interval == 0
             and self.global_step > 0
         )
@@ -876,7 +910,18 @@ class FSDPTrainer(DistributedTrainer):
             log_fn=self.log,
             frozen_prefixes=self._frozen_prefixes,
         )
+        if is_main_process():
+            progress = {
+                "version": 1,
+                "completed_updates": self.global_step,
+                "epoch": epoch,
+                "epoch_complete": getattr(self, "_epoch_complete", False),
+                "batches_consumed": getattr(self, "_batches_consumed", 0),
+            }
+            with open(os.path.join(ckpt_path, "train_progress.json"), "w") as stream:
+                json.dump(progress, stream)
         _ckpt_io.finalize_save()
+        self._last_saved_step = self.global_step
         self.log(f"Saved checkpoint to {ckpt_path}")
 
     def load_state_dict(self, model, resume_config):

@@ -8,7 +8,7 @@ Writes JSON in the format expected by wall-x training configs::
         "action": {"mean": [...], "std": [...], "q01": [...], "q99": [...]}
     }}
 
-When ``--train_config`` is provided, the script reads ``data.lerobot_config.repo_id``,
+When ``--train_config`` is provided, the script reads ``data.lerobot_config.root`` (falling back to ``repo_id``),
 ``norm_stats_path``, ``task.dof_config``, ``task.agent_pos_config``, and
 ``task.action_horizon`` from the YAML. Per-DOF slices are aggregated separately;
 keys ending with ``_relative`` use the same relative-pose logic as the LeRobot loader.
@@ -41,7 +41,7 @@ Without a train config (global stats only, no per-DOF relative slices)::
 
 Requirements
 ------------
-- Local LeRobot v3 dataset at ``--data_root`` (or ``data.lerobot_config.repo_id``)
+- Local LeRobot v3 dataset at ``--data_root`` (or ``data.lerobot_config.root``)
 - ``lerobot>=0.3``, ``datasets``, ``pyarrow``, ``numpy``, ``pyyaml``, ``tqdm``
 
 After running, set ``norm_stats_path`` in your training YAML to the generated JSON.
@@ -103,12 +103,22 @@ class TrainConfigContext:
     action_chunk: int
     dof_config: dict[str, int]
     agent_pos_config: dict[str, int]
+    lerobot_config: dict | None = None
+    train_ratio: float = 0.95
 
 
-def write_norm_stats(path: Path, norm_stats: dict[str, dict]) -> None:
+def write_norm_stats(path: Path, norm_stats: dict[str, dict], manifest=None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps({"norm_stats": norm_stats}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(
+            {
+                "norm_stats": norm_stats,
+                **({"episode_split": manifest} if manifest is not None else {}),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
@@ -198,7 +208,7 @@ def parse_train_config(config: dict[str, Any]) -> TrainConfigContext:
     )
 
     return TrainConfigContext(
-        data_root=Path(repo_id),
+        data_root=Path(lerobot_config.get("root") or repo_id),
         output_path=Path(norm_stats_path),
         state_key=state_key,
         action_key=action_key,
@@ -207,6 +217,8 @@ def parse_train_config(config: dict[str, Any]) -> TrainConfigContext:
         action_chunk=action_chunk,
         dof_config=dof_config,
         agent_pos_config=agent_pos_config,
+        lerobot_config=lerobot_config,
+        train_ratio=data_cfg.get("train_test_split", 0.95),
     )
 
 
@@ -306,6 +318,7 @@ def _load_parquet_state_action_only(
     data_root: Path,
     state_key: str,
     action_key: str,
+    include_episode: bool = False,
 ):
     """
     Read only state/action columns from LeRobot v3 parquet.
@@ -326,7 +339,10 @@ def _load_parquet_state_action_only(
         action_key,
     )
     arrow_dataset = pa_ds.dataset([str(path) for path in paths], format="parquet")
-    table = arrow_dataset.to_table(columns=[state_key, action_key])
+    columns = [state_key, action_key] + (
+        ["episode_index", "frame_index"] if include_episode else []
+    )
+    table = arrow_dataset.to_table(columns=columns)
     return Dataset(table)
 
 
@@ -334,10 +350,13 @@ def _load_state_action_table(
     data_root: Path,
     state_key: str,
     action_key: str,
+    include_episode: bool = False,
 ):
     root = data_root.expanduser().resolve()
     if root.is_dir() and (root / "meta" / "info.json").is_file():
-        table = _load_parquet_state_action_only(root, state_key, action_key)
+        table = _load_parquet_state_action_only(
+            root, state_key, action_key, include_episode
+        )
         return table, state_key, action_key
 
     try:
@@ -357,7 +376,10 @@ def _load_state_action_table(
             f"Expected keys {state_key!r} and {action_key!r} in dataset columns, "
             f"got {non_image_columns}"
         )
-    table = dataset.hf_dataset.select_columns([state_key, action_key])
+    table = dataset.hf_dataset.select_columns(
+        [state_key, action_key]
+        + (["episode_index", "frame_index"] if include_episode else [])
+    )
     return table, state_key, action_key
 
 
@@ -553,8 +575,10 @@ def collect_dof_vectors_from_arrays(
     propri_ranges: dict[str, list[int]],
     action_ranges: dict[str, list[int]],
     action_chunk: int = 32,
-) -> dict[str, np.ndarray]:
-    vectors: dict[str, np.ndarray] = {}
+) -> dict[str, dict[str, np.ndarray]]:
+    # State and action may use the same DOF name with different units/signs.
+    # Keep separate namespaces so action collection cannot overwrite state.
+    vectors: dict[str, dict[str, np.ndarray]] = {"state": {}, "action": {}}
 
     absolute_action_keys = {
         key: index_range
@@ -569,11 +593,11 @@ def collect_dof_vectors_from_arrays(
 
     for sub_key, index_range in propri_ranges.items():
         start, end = index_range
-        vectors[sub_key] = states[:, start:end]
+        vectors["state"][sub_key] = states[:, start:end]
 
     for sub_key, index_range in absolute_action_keys.items():
         start, end = index_range
-        vectors[sub_key] = actions[:, start:end]
+        vectors["action"][sub_key] = actions[:, start:end]
 
     if relative_action_keys:
         logging.info(
@@ -585,15 +609,54 @@ def collect_dof_vectors_from_arrays(
             relative_action_keys.items(), desc="Relative action keys"
         ):
             if "rotation" in sub_key:
-                vectors[sub_key] = _collect_relative_rotation(
+                vectors["action"][sub_key] = _collect_relative_rotation(
                     actions, states, index_range, action_chunk
                 )
             else:
-                vectors[sub_key] = _collect_relative_cartesian(
+                vectors["action"][sub_key] = _collect_relative_cartesian(
                     actions, states, index_range, action_chunk
                 )
 
     return vectors
+
+
+def collect_episode_dof_vectors(
+    states, actions, episode_ids, propri_ranges, action_ranges, action_chunk
+):
+    """Relative chunks never cross episodes or count padded future actions."""
+    if action_chunk < 1:
+        raise ValueError("action_chunk must be positive")
+    result = {"state": {}, "action": {}}
+    for key, (start, end) in propri_ranges.items():
+        result["state"][key] = states[:, start:end]
+    boundaries = np.r_[0, np.flatnonzero(np.diff(episode_ids)) + 1, len(episode_ids)]
+    for key, (start, end) in action_ranges.items():
+        if not key.endswith("_relative"):
+            result["action"][key] = actions[:, start:end]
+            continue
+        chunks = []
+        for left, right in zip(boundaries[:-1], boundaries[1:]):
+            ep_states, ep_actions = (
+                states[left:right, start:end],
+                actions[left:right, start:end],
+            )
+            if "rotation" in key:
+                for anchor in range(len(ep_actions)):
+                    chunks.append(
+                        _compute_delta_from_state_and_abs_rot(
+                            ep_actions[anchor : anchor + action_chunk].astype(
+                                np.float64
+                            ),
+                            ep_states[anchor].astype(np.float64),
+                        )
+                    )
+            else:
+                for offset in range(min(action_chunk, len(ep_actions))):
+                    chunks.append(
+                        ep_actions[offset:] - ep_states[: len(ep_states) - offset]
+                    )
+        result["action"][key] = np.concatenate(chunks, axis=0)
+    return result
 
 
 def compute_norm_stats_with_dof_config(
@@ -606,10 +669,25 @@ def compute_norm_stats_with_dof_config(
     action_chunk: int = 32,
     dof_config: dict[str, int] | None = None,
     agent_pos_config: dict[str, int] | None = None,
+    split_manifest: dict | None = None,
 ) -> dict[str, dict]:
-    table, state_key, action_key = _load_state_action_table(
-        data_root, state_key, action_key
-    )
+    if split_manifest is None:
+        table, state_key, action_key = _load_state_action_table(
+            data_root, state_key, action_key
+        )
+        episode_ids = None
+    else:
+        table, state_key, action_key = _load_state_action_table(
+            data_root, state_key, action_key, True
+        )
+        ids = np.asarray(table["episode_index"]).reshape(-1)
+        frames = np.asarray(table["frame_index"]).reshape(-1)
+        selected = np.flatnonzero(np.isin(ids, split_manifest["train_episodes"]))
+        if set(ids[selected].tolist()) != set(split_manifest["train_episodes"]):
+            raise ValueError("Dataset is missing selected training episodes")
+        selected = selected[np.lexsort((frames[selected], ids[selected]))]
+        table = table.select(selected.tolist())
+        episode_ids = ids[selected]
     states, actions = _table_to_arrays(table, state_key, action_key)
     if dof_config is not None and agent_pos_config is not None:
         states, actions = _prepare_arrays_for_layout(
@@ -620,32 +698,42 @@ def compute_norm_stats_with_dof_config(
         action_key: compute_vector_stats(actions),
     }
 
-    vectors = collect_dof_vectors_from_arrays(
-        states=states,
-        actions=actions,
-        propri_ranges=propri_ranges,
-        action_ranges=action_ranges,
-        action_chunk=action_chunk,
-    )
+    if episode_ids is None:
+        vectors = collect_dof_vectors_from_arrays(
+            states,
+            actions,
+            propri_ranges,
+            action_ranges,
+            action_chunk,
+        )
+    else:
+        vectors = collect_episode_dof_vectors(
+            states,
+            actions,
+            episode_ids,
+            propri_ranges,
+            action_ranges,
+            action_chunk,
+        )
 
     for sub_key, index_range in propri_ranges.items():
-        if sub_key not in vectors:
+        if sub_key not in vectors["state"]:
             logging.warning("No samples collected for propri key %s, skipping", sub_key)
             continue
-        slice_stats = compute_vector_stats(vectors[sub_key])
+        slice_stats = compute_vector_stats(vectors["state"][sub_key])
         _apply_slice_stats(norm_stats[state_key], index_range, slice_stats)
         logging.info("  %s (agent_pos): dim=%d", sub_key, len(slice_stats["mean"]))
 
     for sub_key, index_range in action_ranges.items():
-        if sub_key not in vectors:
+        if sub_key not in vectors["action"]:
             logging.warning("No samples collected for action key %s, skipping", sub_key)
             continue
-        slice_stats = compute_vector_stats(vectors[sub_key])
+        slice_stats = compute_vector_stats(vectors["action"][sub_key])
         _apply_slice_stats(norm_stats[action_key], index_range, slice_stats)
         mode = "relative" if sub_key.endswith("_relative") else "absolute"
         logging.info("  %s (dof, %s): dim=%d", sub_key, mode, len(slice_stats["mean"]))
 
-    write_norm_stats(output_path, norm_stats)
+    write_norm_stats(output_path, norm_stats, split_manifest)
     return norm_stats
 
 
@@ -676,6 +764,17 @@ def compute_norm_stats(
         write_norm_stats(output_path, norm_stats)
         return norm_stats
 
+    from wall_x.data.backends.lerobot.episode_split import episode_split, split_mode
+
+    manifest = None
+    if (
+        train_ctx.lerobot_config is not None
+        and split_mode(train_ctx.lerobot_config) == "episode"
+    ):
+        info = json.loads((data_root / "meta/info.json").read_text(encoding="utf-8"))
+        manifest = episode_split(
+            info["total_episodes"], train_ctx.lerobot_config, train_ctx.train_ratio
+        )
     return compute_norm_stats_with_dof_config(
         data_root=data_root,
         output_path=output_path,
@@ -686,6 +785,7 @@ def compute_norm_stats(
         action_chunk=train_ctx.action_chunk,
         dof_config=train_ctx.dof_config,
         agent_pos_config=train_ctx.agent_pos_config,
+        split_manifest=manifest,
     )
 
 
@@ -707,7 +807,7 @@ examples:
         default=None,
         help=(
             "Training YAML config (e.g. cvpr_example.yml). When set, reads "
-            "data.lerobot_config.repo_id, data.norm_stats_path, task.dof_config, "
+            "data.lerobot_config.root, data.norm_stats_path, task.dof_config, "
             "task.agent_pos_config and task.action_horizon. Action keys ending "
             "with '_relative' use the same relative-pose logic as lerobot loader."
         ),

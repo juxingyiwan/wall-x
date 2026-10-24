@@ -30,3 +30,32 @@ def test_rmsnorm_cuda_inline_matches_pytorch_when_available():
     out = rmsnorm.call_with_backend("cuda_inline", x, weight, eps)
     ref = rmsnorm.call_with_backend("pytorch", x, weight, eps)
     torch.testing.assert_close(out, ref, rtol=1e-3, atol=1e-3)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+@pytest.mark.parametrize("interleave", [False, True])
+def test_installed_rope_cuda_forward_and_backward_match_pytorch(interleave):
+    from wall_x.model.core.ops import rope
+
+    torch.manual_seed(17)
+    q = torch.randn(2, 4, 3, 32, device="cuda", dtype=torch.float32)
+    k = torch.randn(2, 4, 2, 32, device="cuda", dtype=torch.float32)
+    angles = torch.randn(2, 4, 16, device="cuda")
+    cos, sin = angles.cos(), angles.sin()
+    gradients = [torch.randn_like(q), torch.randn_like(k)]
+    reference = [q.clone().requires_grad_(), k.clone().requires_grad_()]
+    expected = rope.call_with_backend(
+        "pytorch", *reference, cos, sin, interleave=interleave
+    )
+    expected_grads = torch.autograd.grad(expected, reference, gradients)
+    inputs = [q.clone().requires_grad_(), k.clone().requires_grad_()]
+    actual = rope.call_with_backend(
+        "cuda_inline", *inputs, cos, sin, interleave=interleave
+    )
+    for result, target in zip(actual, expected):
+        torch.testing.assert_close(result, target, rtol=1e-5, atol=1e-5)
+    actual_grads = torch.autograd.grad(
+        actual, inputs, [gradient.clone() for gradient in gradients]
+    )
+    for result, target in zip(actual_grads, expected_grads):
+        torch.testing.assert_close(result, target, rtol=1e-5, atol=1e-5)

@@ -1,0 +1,16 @@
+# TEMPLATE: never copy over a configured local.yml / standalone.local.yml.
+# Host endpoints and physical devices only; task/control/camera timing stay in local/client.yml.
+# In-process inference and robot control; no server port is used.
+# Copy to standalone.local.yml (ignored).
+checkpoint_root: ${HOME}/.cache/wallx-unified/checkpoints
+client:
+  robot:
+    can_channel: can0
+    robot_id: follower1
+    camera_mapping_verified: false
+    camera_devices:
+      front_view: /dev/v4l/by-id/REPLACE_FRONT-video-index0
+      side_view: /dev/v4l/by-id/REPLACE_SIDE-video-index0
+    lock_paths:
+      - ${HOME}/REPLACE_EXISTING_ROBOT_LOCK_DIRECTORY/session.lock
+      - ${HOME}/REPLACE_EXISTING_ROBOT_LOCK_DIRECTORY/control.lock

@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -118,6 +119,20 @@ class ModelAdapter(ABC):
         ...
 
     def load_step_and_epoch(self, checkpoint_path: str, is_incomplete_epoch: bool):
+        progress_path = os.path.join(checkpoint_path, "train_progress.json")
+        if os.path.isfile(progress_path):
+            with open(progress_path) as stream:
+                progress = json.load(stream)
+            if progress.get("version") != 1:
+                raise ValueError("Unsupported train_progress.json version")
+            return {
+                "global_step": progress["completed_updates"],
+                "start_epoch": progress["epoch"] + int(progress["epoch_complete"]),
+                "batches_consumed": (
+                    0 if progress["epoch_complete"] else progress["batches_consumed"]
+                ),
+                "completed_updates": True,
+            }
         global_step = 0
         start_epoch = 0
 

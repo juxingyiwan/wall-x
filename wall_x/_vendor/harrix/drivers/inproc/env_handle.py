@@ -20,8 +20,15 @@ def _subproc_main(cfg, worker_id, child_conn):
     # CUDA_VISIBLE_DEVICES environment string, so keep the same visible id here.
     cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES") or "0"
     os.environ["CUDA_VISIBLE_DEVICES"] = cuda_visible_devices
-    # EGL device index is always 0 after CUDA_VISIBLE_DEVICES remapping.
-    os.environ["MUJOCO_EGL_DEVICE_ID"] = os.environ.get("MUJOCO_EGL_DEVICE_ID") or "0"
+    if os.environ.get("MUJOCO_GL", "egl").lower().strip() == "osmesa":
+        # robosuite 1.4 checks this variable even for CPU rendering.
+        os.environ.pop("MUJOCO_EGL_DEVICE_ID", None)
+    else:
+        # robosuite expects a physical visible GPU id, not CUDA's remapped 0.
+        os.environ["MUJOCO_EGL_DEVICE_ID"] = (
+            os.environ.get("MUJOCO_EGL_DEVICE_ID")
+            or cuda_visible_devices.split(",")[0].strip()
+        )
 
     # Env workers run robosuite only. Do not import torch here; otherwise many
     # subprocesses may initialize CUDA contexts and compete with the driver model.
@@ -141,12 +148,18 @@ class SubprocEnvHandle:
 
     def shutdown(self) -> None:
         try:
-            self._send("shutdown", None)
-            self._recv()
+            if self._proc.is_alive():
+                self._send("shutdown", None)
+                if self._parent_conn.poll(2):
+                    self._recv()
         except Exception:
             pass
-        if self._proc.is_alive():
-            self._proc.join(timeout=5)
+        finally:
+            self._parent_conn.close()
+            self._proc.join(timeout=2)
             if self._proc.is_alive():
                 self._proc.terminate()
+                self._proc.join(timeout=2)
+            if self._proc.is_alive():
+                self._proc.kill()
                 self._proc.join(timeout=2)

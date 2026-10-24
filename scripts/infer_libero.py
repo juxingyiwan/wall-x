@@ -48,117 +48,75 @@ def _resolve_max_infer_times(
 
 def _load_or_build_raw_config(args: argparse.Namespace) -> dict:
     if args.config is not None:
-        with open(args.config, "r") as f:
-            raw = yaml.safe_load(f) or {}
-        model = raw.setdefault("model", {})
-        env = raw.setdefault("env", {})
-        libero = env.setdefault("libero", {})
-        runtime = raw.setdefault("runtime", {})
-        debug = raw.setdefault("debug", {})
-        if args.checkpoint_path is not None:
-            model["checkpoint_path"] = args.checkpoint_path
-        if args.train_config_path is not None:
-            model["train_config_path"] = args.train_config_path
-        task_indices = _parse_task_indices(args.task_indices)
-        if task_indices is not None:
-            libero["task_indices"] = task_indices
-        if args.max_infer_times is not None or libero.get("max_infer_times") is None:
-            libero["max_infer_times"] = _resolve_max_infer_times(
-                libero.get("task_suite_name", args.task_suite_name),
-                args.max_infer_times,
-            )
-        if args.smoke:
-            libero["task_indices"] = [0]
-            libero["num_trials_per_task"] = 5
-            runtime["num_workers"] = 1
-            runtime["max_batch_size"] = 1
-        if args.deterministic_model:
-            debug["deterministic_model"] = True
-        return raw
+        with open(args.config, encoding="utf-8") as stream:
+            raw = yaml.safe_load(stream) or {}
+        if not isinstance(raw, dict):
+            raise ValueError("Evaluation YAML must contain a mapping")
     else:
-        if args.checkpoint_path is None:
-            raise ValueError("--checkpoint-path is required when --config is not set")
-        max_infer_times = _resolve_max_infer_times(
-            args.task_suite_name, args.max_infer_times
-        )
-        raw = {
-            "model": {
-                "checkpoint_path": args.checkpoint_path,
-                "norm_key": args.norm_key,
-                "cam_names": args.cam_names,
-                "architecture": args.architecture,
-                "action_mode": args.action_mode,
-            },
-            "env": {
-                "type": "libero",
-                "seed": args.seed,
-                "libero": {
-                    "task_suite_name": args.task_suite_name,
-                    "initial_states_path": args.initial_states_path,
-                    "num_trials_per_task": args.num_trials_per_task,
-                    "max_infer_times": max_infer_times,
-                    "skip_intermediate_render": args.skip_intermediate_render,
-                },
-            },
-            "runtime": {
-                "num_workers": args.num_workers,
-                "max_batch_size": args.max_batch_size,
-                "ws_port": args.ws_port,
-                "log_dir": args.log_dir,
-                "driver_mode": args.driver_mode,
-            },
-            "debug": {"deterministic_model": args.deterministic_model},
-        }
-
+        raw = {}
     model = raw.setdefault("model", {})
     env = raw.setdefault("env", {})
     libero = env.setdefault("libero", {})
     runtime = raw.setdefault("runtime", {})
     debug = raw.setdefault("debug", {})
-
-    if args.checkpoint_path is not None:
-        model["checkpoint_path"] = args.checkpoint_path
-    if args.train_config_path is not None:
-        model["train_config_path"] = args.train_config_path
-    if args.norm_key is not None:
-        model["norm_key"] = args.norm_key
-    if args.cam_names is not None:
-        model["cam_names"] = args.cam_names
-    if args.action_horizon is not None:
-        model["action_horizon"] = args.action_horizon
-    if args.architecture is not None:
-        model["architecture"] = args.architecture
-    if args.action_mode is not None:
-        model["action_mode"] = args.action_mode
-
+    for section, defaults in (
+        (
+            model,
+            {
+                "checkpoint_path": None,
+                "train_config_path": None,
+                "norm_key": "libero_all",
+                "cam_names": ["face_view", "right_wrist_view"],
+                "architecture": "qwen2_5",
+                "action_mode": "flow",
+                "action_horizon": None,
+            },
+        ),
+        (env, {"seed": 42}),
+        (
+            libero,
+            {
+                "task_suite_name": "libero_spatial",
+                "initial_states_path": "DEFAULT",
+                "num_trials_per_task": 50,
+                "skip_intermediate_render": True,
+            },
+        ),
+        (
+            runtime,
+            {
+                "num_workers": 1,
+                "max_batch_size": 1,
+                "ws_port": 8765,
+                "log_dir": "/tmp/harrix_libero_eval",
+                "driver_mode": "in_process",
+            },
+        ),
+        (debug, {"deterministic_model": False}),
+    ):
+        for key, default in defaults.items():
+            value = getattr(args, key)
+            if value is not None:
+                section[key] = value
+            else:
+                section.setdefault(key, default)
     env["type"] = "libero"
-    env["seed"] = args.seed
-    libero["task_suite_name"] = args.task_suite_name
-    libero["initial_states_path"] = args.initial_states_path
-    libero["num_trials_per_task"] = args.num_trials_per_task
-    libero["max_infer_times"] = _resolve_max_infer_times(
-        args.task_suite_name, args.max_infer_times
-    )
-    libero["skip_intermediate_render"] = args.skip_intermediate_render
-    task_indices = _parse_task_indices(args.task_indices)
-    if task_indices is not None:
-        libero["task_indices"] = task_indices
+    if not model.get("checkpoint_path"):
+        raise ValueError("--checkpoint-path is required when YAML does not provide it")
+    # A new suite gets its own default rollout budget unless explicitly given.
+    if (
+        args.max_infer_times is not None
+        or args.task_suite_name is not None
+        or libero.get("max_infer_times") is None
+    ):
+        libero["max_infer_times"] = _resolve_max_infer_times(
+            libero["task_suite_name"], args.max_infer_times
+        )
+    if args.task_indices is not None:
+        libero["task_indices"] = _parse_task_indices(args.task_indices)
     if args.smoke:
-        libero["task_indices"] = [0]
-        libero["num_trials_per_task"] = 5
-        runtime["num_workers"] = 1
-        runtime["max_batch_size"] = 1
-
-    runtime["num_workers"] = (
-        args.num_workers if not args.smoke else runtime["num_workers"]
-    )
-    runtime["max_batch_size"] = (
-        args.max_batch_size if not args.smoke else runtime["max_batch_size"]
-    )
-    runtime["ws_port"] = args.ws_port
-    runtime["log_dir"] = args.log_dir
-    runtime["driver_mode"] = args.driver_mode
-    debug["deterministic_model"] = args.deterministic_model
+        libero.update(task_indices=[0], num_trials_per_task=5)
+        runtime.update(num_workers=1, max_batch_size=1)
     return raw
 
 
@@ -169,16 +127,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--checkpoint-path", default=None)
     parser.add_argument("--train-config-path", default=None)
-    parser.add_argument("--norm-key", default="libero_all")
-    parser.add_argument("--architecture", default="qwen2_5")
-    parser.add_argument("--action-mode", default="flow")
-    parser.add_argument(
-        "--cam-names", nargs="+", default=["face_view", "right_wrist_view"]
-    )
+    parser.add_argument("--norm-key", default=None)
+    parser.add_argument("--architecture", default=None)
+    parser.add_argument("--action-mode", default=None)
+    parser.add_argument("--cam-names", nargs="+", default=None)
     parser.add_argument("--action-horizon", type=int, default=None)
-    parser.add_argument("--task-suite-name", default="libero_spatial")
-    parser.add_argument("--initial-states-path", default="DEFAULT")
-    parser.add_argument("--num-trials-per-task", type=int, default=50)
+    parser.add_argument("--task-suite-name", default=None)
+    parser.add_argument("--initial-states-path", default=None)
+    parser.add_argument("--num-trials-per-task", type=int, default=None)
     parser.add_argument(
         "--task-indices", default=None, help="Comma-separated task ids."
     )
@@ -191,24 +147,38 @@ def parse_args() -> argparse.Namespace:
             "and match the internal LIBERO evaluator."
         ),
     )
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--num-workers", type=int, default=1)
-    parser.add_argument("--max-batch-size", type=int, default=1)
-    parser.add_argument("--ws-port", type=int, default=8765)
-    parser.add_argument("--log-dir", default="/tmp/harrix_libero_eval")
-    parser.add_argument("--driver-mode", choices=["in_process"], default="in_process")
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--num-workers", type=int, default=None)
+    parser.add_argument("--max-batch-size", type=int, default=None)
+    parser.add_argument("--ws-port", type=int, default=None)
+    parser.add_argument("--log-dir", default=None)
+    parser.add_argument("--driver-mode", choices=["in_process"], default=None)
     parser.add_argument("--smoke", action="store_true")
-    parser.add_argument("--deterministic-model", action="store_true")
+    parser.add_argument(
+        "--deterministic-model", action=argparse.BooleanOptionalAction, default=None
+    )
     parser.add_argument(
         "--skip-intermediate-render",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=None,
+    )
+    parser.add_argument(
+        "--print-config",
+        action="store_true",
+        help="Print the merged configuration without loading models or simulators.",
     )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    raw = _load_or_build_raw_config(args)
+    if args.print_config:
+        print(yaml.safe_dump(raw, sort_keys=False), end="")
+        return 0
+    from libero_resources import configure_libero
+
+    configure_libero(Path(__file__).resolve().parents[1])
     _ensure_local_harrix_on_path()
 
     from wall_x._vendor.harrix.eval_config import (
@@ -216,13 +186,14 @@ def main() -> int:
         load_eval_config,
     )
 
-    raw = _load_or_build_raw_config(args)
-
     with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
         yaml.safe_dump(raw, f, sort_keys=False)
         tmp_config = f.name
 
-    cfg = autofill_from_checkpoint(load_eval_config(tmp_config))
+    try:
+        cfg = autofill_from_checkpoint(load_eval_config(tmp_config))
+    finally:
+        Path(tmp_config).unlink()
     if cfg.runtime.driver_mode != "in_process":
         raise ValueError("Only driver_mode='in_process' is supported")
     from wall_x._vendor.harrix.drivers.inproc import run

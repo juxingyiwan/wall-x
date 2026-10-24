@@ -13,6 +13,7 @@ import torch
 import torch.distributed as dist
 from torch.distributed.device_mesh import DeviceMesh, init_device_mesh
 from torch.distributed.fsdp import (
+    CPUOffloadPolicy,
     MixedPrecisionPolicy,
     OffloadPolicy,
 )
@@ -56,7 +57,9 @@ class DistributionStrategy(ABC):
                 type(model).__name__,
             )
             return
-        method()
+        # Vision blocks pass keyword arguments through checkpoint(). Pin the
+        # non-reentrant implementation across supported Transformers versions.
+        method(gradient_checkpointing_kwargs={"use_reentrant": False})
 
     @abstractmethod
     def wrap(self, model: torch.nn.Module) -> torch.nn.Module:
@@ -167,7 +170,7 @@ class FSDPStrategy(DistributionStrategy):
         )
 
         offload_policy: Optional[OffloadPolicy] = (
-            OffloadPolicy(pin_memory=True)
+            CPUOffloadPolicy(pin_memory=True)
             if self._cfg.get("fsdp_cpu_offload", False)
             else None
         )
