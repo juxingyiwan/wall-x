@@ -84,11 +84,13 @@ Each initialization uses one training run. The [training template](workspace/exa
 
 Training flow loss through 25,000 steps, with a logarithmic vertical axis. Faint lines show logged interval averages; solid lines show a trailing 25-point mean (about 250 steps).
 
+The results indicate that the foundation model pretrained on robot data converges faster on LIBERO. With sufficient training for both initializations, their final success rates are similar.
+
 <a id="robotwin-results"></a>
 
 ### RoboTwin 2.0
 
-Five-task training uses 50 clean + 500 randomized demonstrations per task (2,750 total), effective batch 256 and a checkpoint at 30,000 completed updates. Evaluation uses unseen instructions, 32 predicted / 16 executed actions and **100 expert-valid trials per task and condition**: 500 Clean + 500 Randomized trials. See the [evaluation settings](docs/robotwin.md#reported-settings) for scenes and seeds.
+Five-task training uses 50 clean + 500 randomized demonstrations per task (2,750 total), effective batch 256 and a checkpoint at 30,000 completed updates. Evaluation uses unseen instructions, 32 predicted / 16 executed actions and **100 expert-valid trials per task and condition**: 500 Clean + 500 Randomized trials. See the [evaluation settings](docs/robotwin.md#reported-settings) for scenes and seeds. Success rates use valid evaluation episodes across the five tasks. Policy failures count in the denominator; expert-invalid scenes are excluded before evaluation.
 
 | Task | Clean successes/trials | Randomized successes/trials |
 | --- | --- | --- |
@@ -99,7 +101,7 @@ Five-task training uses 50 clean + 500 randomized demonstrations per task (2,750
 | `put_object_cabinet` | 76/100 | 82/100 |
 | **Five-task mean** | **78.0% (390/500)** | **86.6% (433/500)** |
 
-Success rates use valid evaluation episodes across the five tasks. Policy failures count in the denominator; expert-invalid scenes are excluded before evaluation.
+Across the five tasks with unseen instructions, the policy achieves mean success rates of 78.0% under Clean conditions and 86.6% under Randomized conditions, with Randomized outperforming Clean.
 
 <a id="upstream"></a>
 
@@ -175,7 +177,7 @@ $$
 
 Here $q_{k,j}$ is the predicted angle of joint $j$ at step $k$, in degrees. The mean covers 14 second differences per joint (84 terms in total). The unit is degrees/sample-step²; lower is smoother. Values below pool the corresponding checkpoints by pair count.
 
-| Task | Prediction pairs | Endpoint -1 | Endpoint 0 | Reduction |
+| Task | Prediction pairs | Upstream padding | Aligned padding | Reduction |
 | --- | --- | --- | --- | --- |
 | Bowl | 360 | 2.958 | 0.262 | 91.1% |
 | Drawer | 270 | 2.334 | 0.206 | 91.2% |
