@@ -101,7 +101,9 @@ Five-task training uses 50 clean + 500 randomized demonstrations per task (2,750
 | `put_object_cabinet` | 76/100 | 82/100 |
 | **Five-task mean** | **78.0% (390/500)** | **86.6% (433/500)** |
 
-Across the five tasks with unseen instructions, the policy achieves mean success rates of 78.0% under Clean conditions and 86.6% under Randomized conditions, with Randomized outperforming Clean.
+Randomized accounts for **90.8% of training frames**, with sampling not balanced between the two conditions, making it the dominant training distribution. Evaluation scenes are generated and screened for expert validity separately for each condition. Randomization consumes random draws before object generation, so even identical seeds can yield different object variants, layouts and manipulation difficulty.
+
+The **8.6-percentage-point** advantage for Randomized is concentrated in `open_microwave` (+18 percentage points) and `click_bell` (+21 percentage points), which together contribute **7.8 percentage points, about 91% of the overall gap**. This pattern is consistent with better adaptation to the dominant randomized training distribution and more pronounced policy weaknesses in some Clean scenes.
 
 <a id="upstream"></a>
 
