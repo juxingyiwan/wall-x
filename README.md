@@ -1,28 +1,58 @@
 # Wall-X: LIBERO, RoboTwin 2.0 and ReBot
 
-[中文](README.zh-CN.md) · [Home](README.md)
+[中文](README.zh-CN.md) · [Upstream Wall-X](https://github.com/X-Square-Robot/wall-x) · [All CI checks](https://github.com/juxingyiwan/wall-x/actions)
 
-Built on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), this repository provides training, evaluation and deployment workflows for LIBERO, RoboTwin 2.0 and ReBot / B601.
+[![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
+
+**Train Wall-X policies, evaluate them in simulation and deploy them on ReBot / B601.**
+
+Built on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), this repository brings LIBERO, RoboTwin 2.0 and ReBot into one codebase, with a separate environment and complete guide for each workflow.
+
+- **Training and evaluation:** demonstration preparation, checkpoint resume and task-level evaluation reports.
+- **Real-robot deployment:** local or network inference, RTC (real-time chunking) and Rerun visualization.
+- **Action alignment:** shared training/inference padding alignment, with a robot comparison and offline ablation.
+
+[Get started](#workflows) · [Experimental results](#experiments) · [Technical development notes](#development)
+
+<a id="rebot-results"></a>
+
+## ReBot: Wall-OSS-0.5 with and without RTC
+
+Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, disabled on the right**. Click the preview to watch the original side-by-side comparison.
+
+[![Wall-OSS-0.5 comparison: RTC enabled on the left, disabled on the right](assets/rebot_walloss05_rtc_comparison.jpg)](assets/rebot_walloss05_rtc_comparison.mp4)
+
+[Play comparison](assets/rebot_walloss05_rtc_comparison.mp4) · [Operating steps](docs/rebot.md#operate) · [Action-padding notes and ablation](#action-padding)
 
 <a id="workflows"></a>
 
 ## Choose one workflow
 
-| Workflow | Complete guide |
-| --- | --- |
-| LIBERO: install, prepare data, train, resume and evaluate | [English](docs/libero.md) · [中文](docs/libero.zh-CN.md) |
-| RoboTwin 2.0: model/simulator setup, convert, train and evaluate | [English](docs/robotwin.md) · [中文](docs/robotwin.zh-CN.md) |
-| ReBot / B601: install, prepare/train, local/network inference, sync and RTC | [English](docs/rebot.md) · [中文](docs/rebot.zh-CN.md) |
+Clone the repository and record the printed commit ID for your run. Follow the selected guide's environment and resource setup before running the first task.
 
-Each workflow uses its own Conda environment; RoboTwin has a separate simulator environment. The guides cover setup, resources, commands and troubleshooting.
+```bash
+git clone https://github.com/juxingyiwan/wall-x.git
+cd wall-x
+git rev-parse HEAD
+```
 
-Clone this repository, run the guide commands from its root and replace placeholder paths. Model training and inference require Linux, an NVIDIA GPU and CUDA. Each guide explains how to obtain foundation weights, prepare data and use checkpoints.
+| Goal | First task | Complete guide |
+| --- | --- | --- |
+| Evaluate or train on LIBERO | With a trained checkpoint, run [one evaluation episode](docs/libero.md#evaluate); for a new model, start with [demonstrations and training](docs/libero.md#data) | [English](docs/libero.md) · [中文](docs/libero.zh-CN.md) |
+| Evaluate or train on RoboTwin 2.0 | Start with the [two-task dataset](docs/robotwin.md#data); with a trained checkpoint, run the [evaluation dry run](docs/robotwin.md#evaluate) | [English](docs/robotwin.md) · [中文](docs/robotwin.zh-CN.md) |
+| Run ReBot / B601 | Prepare the [robot and checkpoint configuration](docs/rebot.md#configuration), then [replay recorded observations](docs/rebot.md#replay) before [robot operation](docs/rebot.md#operate) | [English](docs/rebot.md) · [中文](docs/rebot.zh-CN.md) |
+
+Model training and inference use Linux, an NVIDIA GPU, CUDA and Conda. Each workflow has its own environment; RoboTwin uses an additional simulator environment with NVIDIA/Vulkan graphics and simulator assets.
+
+ReBot requires a B601 arm, two cameras and a compatible trained checkpoint. The GPU can run on the robot host or on a separate model server. Run guide commands from the repository root and replace placeholder paths with your own.
 
 <a id="experiments"></a>
 
 ## Experimental results
 
-Training configurations and evaluation procedures are documented in the corresponding guides.
+The guides provide pinned foundation-model and data downloads, training configurations and evaluation commands. Evaluation uses a trained task checkpoint with its saved configuration and normalization statistics.
+
+Reproduction entry points: [LIBERO resources](docs/libero.md#assets) · [LIBERO training and split](docs/libero.md#train) · [LIBERO evaluation](docs/libero.md#evaluate) · [RoboTwin resources](docs/robotwin.md#assets) · [RoboTwin five-task protocol and seeds](docs/robotwin.md#reported-settings).
 
 <a id="libero-results"></a>
 
@@ -38,7 +68,7 @@ Both initializations use the Wall-X action architecture and full-parameter train
 | Long | 96.0% (480/500) | 94.6% (473/500) |
 | **Overall** | **98.2% (1964/2000)** | **97.9% (1958/2000)** |
 
-Each initialization uses one training run.
+Each initialization uses one training run. The [training template](workspace/example/libero.yml) and [reported-run settings](docs/libero.md#train) specify the two initializations and data split.
 
 ![LIBERO training flow loss for Wall-OSS-0.5 and Qwen2.5-VL-3B initializations](assets/libero_training_loss.png)
 
@@ -61,16 +91,6 @@ Five-task training uses 50 clean + 500 randomized demonstrations per task (2,750
 
 Success rates use valid evaluation episodes across the five tasks. Policy failures count in the denominator; expert-invalid scenes are excluded before evaluation.
 
-<a id="rebot-results"></a>
-
-### ReBot: Wall-OSS-0.5 with and without RTC
-
-Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, disabled on the right**. Click the preview to watch the original side-by-side comparison.
-
-[![Wall-OSS-0.5 comparison: RTC enabled on the left, disabled on the right](assets/rebot_walloss05_rtc_comparison.jpg)](assets/rebot_walloss05_rtc_comparison.mp4)
-
-[Play comparison](assets/rebot_walloss05_rtc_comparison.mp4) · [Operating steps](docs/rebot.md#operate) · [Action-padding notes and ablation](#action-padding)
-
 <a id="upstream"></a>
 
 ## Wall-X documentation
@@ -87,7 +107,9 @@ Official documentation from revision `ce2a1ae31d9ee1028b97ca40e3f66034cf8c0e5f`,
 
 ## Contribute and develop
 
-See [Contributing](CONTRIBUTING.md) ([中文](CONTRIBUTING.zh-CN.md)) for tests and PR preparation, and [Technical development notes](#development) ([中文](README.zh-CN.md#development)) for implementation details. The project uses [Apache-2.0](LICENSE); third-party attribution is in the [source notices](NOTICE.txt) and [client notices](deployment/client/NOTICE.txt). Models and datasets use their respective licenses.
+See [Contributing](CONTRIBUTING.md) ([中文](CONTRIBUTING.zh-CN.md)) for tests and PR preparation, and [Technical development notes](#development) ([中文](README.zh-CN.md#development)) for implementation details. The project uses [Apache-2.0](LICENSE); third-party attribution is in the [source notices](NOTICE.txt) and [client notices](deployment/client/NOTICE.txt).
+
+Models, datasets and simulators retain their own licenses. Model and dataset sources (pinned revisions): [Wall-OSS-0.5](https://huggingface.co/X-Square-Robot/wall-oss-0.5/tree/b7dc23a82dbf70a65859c9fdd596703234597028) · [Qwen2.5-VL-3B](https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct/tree/66285546d2b821cf421d4f5eb2576359d3770cd3) · [LIBERO](https://huggingface.co/datasets/lerobot/libero/tree/a1aaacb7f6cd6ee5fb43120f673cebb0cfea7dd4) · [RoboTwin 2.0](https://huggingface.co/datasets/TianxingChen/RoboTwin2.0/tree/3dc3b798668feb99ac61cc9086d84cbcc3d79186) · [RoboTwin LeRobot](https://huggingface.co/datasets/robbyant/robotwin-clean-and-aug-lerobot/tree/595d4acc7e026aa57afba218f4170c6d79e39103).
 
 <a id="development"></a>
 
@@ -143,7 +165,7 @@ $$
 
 Here $q_{k,j}$ is the predicted angle of joint $j$ at step $k$, in degrees. The mean covers 14 second differences per joint (84 terms in total). The unit is degrees/sample-step²; lower is smoother. Values below pool the corresponding checkpoints by pair count.
 
-| Task | Pairs | Endpoint -1 | Endpoint 0 | Reduction |
+| Task | Prediction pairs | Endpoint -1 | Endpoint 0 | Reduction |
 | --- | --- | --- | --- | --- |
 | Bowl | 360 | 2.958 | 0.262 | 91.1% |
 | Drawer | 270 | 2.334 | 0.206 | 91.2% |

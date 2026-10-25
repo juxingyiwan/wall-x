@@ -1,28 +1,58 @@
 # Wall-X：LIBERO、RoboTwin 2.0 与 ReBot
 
-[English](README.md) · [总导航](README.zh-CN.md)
+[English](README.md) · [上游 Wall-X](https://github.com/X-Square-Robot/wall-x) · [全部 CI 检查](https://github.com/juxingyiwan/wall-x/actions)
 
-基于 [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x)，提供 LIBERO、RoboTwin 2.0 和 ReBot / B601 的训练、评估与部署流程。
+[![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
+
+**训练 Wall-X 策略，在仿真中评估，并部署到 ReBot / B601 真机。**
+
+基于 [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x)，将 LIBERO、RoboTwin 2.0 和 ReBot 整合到同一代码库，每条使用路线配有独立环境和完整指南。
+
+- **训练与评估**：演示数据准备、checkpoint 恢复和逐任务评估报告。
+- **真机部署**：本地或网络推理、RTC（实时动作分块）和 Rerun 可视化。
+- **动作对齐**：共享的训练/推理 padding 对齐，以及真机对比和离线消融。
+
+[开始使用](#workflows) · [实验结果](#experiments) · [技术开发说明](#development)
+
+<a id="rebot-results"></a>
+
+## ReBot：Wall-OSS-0.5 与 RTC
+
+Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧未开启 RTC**。点击预览图观看原始并排对比视频。
+
+[![Wall-OSS-0.5 真机对比：左侧开启 RTC，右侧未开启 RTC](assets/rebot_walloss05_rtc_comparison.jpg)](assets/rebot_walloss05_rtc_comparison.mp4)
+
+[播放对比视频](assets/rebot_walloss05_rtc_comparison.mp4) · [运行步骤](docs/rebot.zh-CN.md#operate) · [Action padding 技术说明与消融](#action-padding)
 
 <a id="workflows"></a>
 
 ## 选择一条使用路线
 
-| 使用路线 | 完整指南 |
-| --- | --- |
-| LIBERO：安装、数据准备、训练、恢复与评估 | [English](docs/libero.md) · [中文](docs/libero.zh-CN.md) |
-| RoboTwin 2.0：模型/模拟器安装、转换、训练与评估 | [English](docs/robotwin.md) · [中文](docs/robotwin.zh-CN.md) |
-| ReBot / B601：安装、数据/训练、本地/网络推理、同步与 RTC | [English](docs/rebot.md) · [中文](docs/rebot.zh-CN.md) |
+克隆仓库，并记录输出的提交号作为本次运行的代码版本。先按所选指南配置环境与资源，再运行首个任务。
 
-各场景使用独立 Conda 环境，RoboTwin 另设模拟器环境。每份指南包含环境配置、资源准备、运行命令与排错。
+```bash
+git clone https://github.com/juxingyiwan/wall-x.git
+cd wall-x
+git rev-parse HEAD
+```
 
-克隆本仓库后，在仓库根目录执行指南中的命令并替换占位路径。模型训练与推理需要 Linux、NVIDIA GPU 和 CUDA。基础模型下载、数据准备及 checkpoint 使用方法见各场景指南。
+| 使用目标 | 首个任务 | 完整指南 |
+| --- | --- | --- |
+| LIBERO 仿真评估或训练 | 已有训练 checkpoint 时先跑[单回合评估](docs/libero.zh-CN.md#evaluate)；训练新模型则从[演示数据与训练](docs/libero.zh-CN.md#data)开始 | [English](docs/libero.md) · [中文](docs/libero.zh-CN.md) |
+| RoboTwin 2.0 仿真评估或训练 | 从[双任务数据示例](docs/robotwin.zh-CN.md#data)开始；已有训练 checkpoint 时先跑[评估预检](docs/robotwin.zh-CN.md#evaluate) | [English](docs/robotwin.md) · [中文](docs/robotwin.zh-CN.md) |
+| ReBot / B601 真机运行 | 准备[机器人与 checkpoint 配置](docs/rebot.zh-CN.md#configuration)，先用[录制观测回放](docs/rebot.zh-CN.md#replay)验证，再进入[真机操作](docs/rebot.zh-CN.md#operate) | [English](docs/rebot.md) · [中文](docs/rebot.zh-CN.md) |
+
+模型训练与推理使用 Linux、NVIDIA GPU、CUDA 和 Conda。各场景使用独立环境；RoboTwin 另设模拟器环境，需要 NVIDIA/Vulkan 图形支持和模拟器资源。
+
+ReBot 需要 B601 机械臂、两路相机和兼容的训练 checkpoint。GPU 可位于机器人本机或独立模型服务器。指南命令均从仓库根目录执行，并将占位路径替换为实际路径。
 
 <a id="experiments"></a>
 
 ## 实验结果
 
-各场景的训练配置与评估流程见对应指南。
+指南提供固定版本的基础模型与数据下载、训练配置和评估命令。评估使用训练产出的任务 checkpoint，并读取随附配置与归一化统计量。
+
+复现入口：[LIBERO 资源](docs/libero.zh-CN.md#assets) · [LIBERO 训练与数据划分](docs/libero.zh-CN.md#train) · [LIBERO 评估](docs/libero.zh-CN.md#evaluate) · [RoboTwin 资源](docs/robotwin.zh-CN.md#assets) · [RoboTwin 五任务协议与种子](docs/robotwin.zh-CN.md#reported-settings)。
 
 <a id="libero-results"></a>
 
@@ -38,7 +68,7 @@
 | Long | 96.0% (480/500) | 94.6% (473/500) |
 | **总体** | **98.2% (1964/2000)** | **97.9% (1958/2000)** |
 
-每种初始化各训练一轮。
+每种初始化各进行一次独立训练。[训练模板](workspace/example/libero.yml)与[报告实验设置](docs/libero.zh-CN.md#train)说明了两种初始化方式及数据划分。
 
 ![Wall-OSS-0.5 与 Qwen2.5-VL-3B 初始化的 LIBERO 训练 flow loss](assets/libero_training_loss.png)
 
@@ -61,16 +91,6 @@
 
 成功率按五个任务的有效评估回合计算，策略失败计入分母，专家无效场景在评估前排除。
 
-<a id="rebot-results"></a>
-
-### ReBot：Wall-OSS-0.5 与 RTC
-
-Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧未开启 RTC**。点击预览图观看原始并排对比视频。
-
-[![Wall-OSS-0.5 真机对比：左侧开启 RTC，右侧未开启 RTC](assets/rebot_walloss05_rtc_comparison.jpg)](assets/rebot_walloss05_rtc_comparison.mp4)
-
-[播放对比视频](assets/rebot_walloss05_rtc_comparison.mp4) · [运行步骤](docs/rebot.zh-CN.md#operate) · [Action padding 技术说明与消融](#action-padding)
-
 <a id="upstream"></a>
 
 ## Wall-X 相关文档
@@ -87,7 +107,9 @@ Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧�
 
 ## 贡献与开发
 
-测试与 PR 准备见[贡献指南](CONTRIBUTING.zh-CN.md)（[English](CONTRIBUTING.md)），实现要点见[技术开发说明](#development)（[English](README.md#development)）。项目采用 [Apache-2.0](LICENSE)；第三方归属见[来源声明](NOTICE.txt)和[客户端声明](deployment/client/NOTICE.txt)，模型与数据遵循各自许可。
+测试与 PR 准备见[贡献指南](CONTRIBUTING.zh-CN.md)（[English](CONTRIBUTING.md)），实现要点见[技术开发说明](#development)（[English](README.md#development)）。项目采用 [Apache-2.0](LICENSE)；第三方归属见[来源声明](NOTICE.txt)和[客户端声明](deployment/client/NOTICE.txt)。
+
+模型、数据和模拟器遵循各自许可。模型与数据资源（固定版本）：[Wall-OSS-0.5](https://huggingface.co/X-Square-Robot/wall-oss-0.5/tree/b7dc23a82dbf70a65859c9fdd596703234597028) · [Qwen2.5-VL-3B](https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct/tree/66285546d2b821cf421d4f5eb2576359d3770cd3) · [LIBERO](https://huggingface.co/datasets/lerobot/libero/tree/a1aaacb7f6cd6ee5fb43120f673cebb0cfea7dd4) · [RoboTwin 2.0](https://huggingface.co/datasets/TianxingChen/RoboTwin2.0/tree/3dc3b798668feb99ac61cc9086d84cbcc3d79186) · [RoboTwin LeRobot](https://huggingface.co/datasets/robbyant/robotwin-clean-and-aug-lerobot/tree/595d4acc7e026aa57afba218f4170c6d79e39103)。
 
 <a id="development"></a>
 
@@ -143,7 +165,7 @@ $$
 
 其中，$q_{k,j}$ 为第 $k$ 步、第 $j$ 个关节的预测角度，单位为度。每个关节有 14 个二阶差分，共对 84 项取平均。指标单位为度/采样步²，越小越平滑。下表按配对数汇总相关 checkpoint。
 
-| 任务 | 配对数 | 终点 -1 | 终点 0 | 降幅 |
+| 任务 | 配对预测数 | 终点 -1 | 终点 0 | 降幅 |
 | --- | --- | --- | --- | --- |
 | Bowl | 360 | 2.958 | 0.262 | 91.1% |
 | Drawer | 270 | 2.334 | 0.206 | 91.2% |
