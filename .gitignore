@@ -30,6 +30,8 @@ ckpt/
 *.mp4
 !/assets/rebot_walloss05_rtc_comparison.mp4
 !/assets/rebot_walloss05_padding_comparison.mp4
+!/assets/rebot_grasp_the_cube_to_the_bowl.mp4
+!/assets/rebot_grasp_the_pen_to_the_box.mp4
 
 # Editor / OS noise
 .DS_Store

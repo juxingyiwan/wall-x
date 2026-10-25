@@ -12,7 +12,7 @@
 - **真机部署**：本地或网络推理、RTC（实时动作分块）和 Rerun 可视化。
 - **动作对齐**：共享的训练/推理 padding 对齐，以及真机对比和离线消融。
 
-[开始使用](#workflows) · [实验结果](#experiments) · [技术开发说明](#development)
+[开始使用](#workflows) · [真机演示](#rebot-demos) · [实验结果](#experiments) · [技术开发说明](#development)
 
 <a id="rebot-results"></a>
 
@@ -23,6 +23,16 @@ Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧�
 [![Wall-OSS-0.5 真机对比：左侧开启 RTC，右侧未开启 RTC](assets/rebot_walloss05_rtc_comparison.jpg)](assets/rebot_walloss05_rtc_comparison.mp4)
 
 [播放对比视频](assets/rebot_walloss05_rtc_comparison.mp4) · [运行步骤](docs/rebot.zh-CN.md#operate) · [Action padding 技术说明与消融](#action-padding)
+
+<a id="rebot-demos"></a>
+
+## ReBot：任务演示
+
+点击预览图观看完整演示：左侧将方块抓取到碗中，右侧将笔抓取到盒中。标题使用传给策略的完整任务指令。
+
+| `Grasp the cube to the bowl` | `Grasp the pen to the box` |
+| --- | --- |
+| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.jpg)](assets/rebot_grasp_the_cube_to_the_bowl.mp4) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.jpg)](assets/rebot_grasp_the_pen_to_the_box.mp4) |
 
 <a id="workflows"></a>
 

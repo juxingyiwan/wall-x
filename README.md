@@ -12,7 +12,7 @@ Built on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), th
 - **Real-robot deployment:** local or network inference, RTC (real-time chunking) and Rerun visualization.
 - **Action alignment:** shared training/inference padding alignment, with a robot comparison and offline ablation.
 
-[Get started](#workflows) · [Experimental results](#experiments) · [Technical development notes](#development)
+[Get started](#workflows) · [Robot demonstrations](#rebot-demos) · [Experimental results](#experiments) · [Technical development notes](#development)
 
 <a id="rebot-results"></a>
 
@@ -23,6 +23,16 @@ Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, 
 [![Wall-OSS-0.5 comparison: RTC enabled on the left, disabled on the right](assets/rebot_walloss05_rtc_comparison.jpg)](assets/rebot_walloss05_rtc_comparison.mp4)
 
 [Play comparison](assets/rebot_walloss05_rtc_comparison.mp4) · [Operating steps](docs/rebot.md#operate) · [Action-padding notes and ablation](#action-padding)
+
+<a id="rebot-demos"></a>
+
+## ReBot: task demonstrations
+
+Click a preview to watch the complete demonstration: moving the cube into the bowl on the left, and the pen into the box on the right. The headings use the full task instructions passed to the policy.
+
+| `Grasp the cube to the bowl` | `Grasp the pen to the box` |
+| --- | --- |
+| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.jpg)](assets/rebot_grasp_the_cube_to_the_bowl.mp4) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.jpg)](assets/rebot_grasp_the_pen_to_the_box.mp4) |
 
 <a id="workflows"></a>
 
