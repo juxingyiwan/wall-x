@@ -101,9 +101,12 @@ Five-task training uses 50 clean + 500 randomized demonstrations per task (2,750
 | `put_object_cabinet` | 76/100 | 82/100 |
 | **Five-task mean** | **78.0% (390/500)** | **86.6% (433/500)** |
 
-Randomized accounts for **90.8% of training frames**, with sampling not balanced between the two conditions, making it the dominant training distribution. Evaluation scenes are generated and screened for expert validity separately for each condition. Randomization consumes random draws before object generation, so even identical seeds can yield different object variants, layouts and manipulation difficulty.
+The results show a higher mean success rate for Randomized (**86.6%**) than for Clean (**78.0%**). Possible reasons are:
 
-The **8.6-percentage-point** advantage for Randomized is concentrated in `open_microwave` (+18 percentage points) and `click_bell` (+21 percentage points), which together contribute **7.8 percentage points, about 91% of the overall gap**. This pattern is consistent with better adaptation to the dominant randomized training distribution and more pronounced policy weaknesses in some Clean scenes.
+1. **Training is dominated by Randomized data.** Randomized accounts for **90.8% of training frames**, with sampling not balanced between the two conditions, so the model may be better adapted to randomized scenes.
+2. **Evaluation scenes are not paired across conditions.** Scenes are generated and screened for expert validity separately for each condition. Randomization consumes random draws before object generation, so even identical seeds can yield different object variants, layouts and manipulation difficulty, affecting the two success rates.
+
+The gap is concentrated in `open_microwave` (+18 percentage points) and `click_bell` (+21 percentage points), which together contribute **7.8 percentage points, about 91% of the overall 8.6-percentage-point gap**.
 
 <a id="upstream"></a>
 
