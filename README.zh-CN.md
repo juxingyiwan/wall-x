@@ -28,11 +28,11 @@ Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧�
 
 ## ReBot：任务演示
 
-点击预览图观看完整演示：左侧将方块抓取到碗中，右侧将笔抓取到盒中。标题使用传给策略的完整任务指令。
+点击预览图观看完整演示：将方块抓取到碗中、将笔抓取到盒中，以及打开抽屉并将方块放入。各标题均为传给策略的完整任务指令。
 
-| `Grasp the cube to the bowl` | `Grasp the pen to the box` |
-| --- | --- |
-| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.jpg)](assets/rebot_grasp_the_cube_to_the_bowl.mp4) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.jpg)](assets/rebot_grasp_the_pen_to_the_box.mp4) |
+| `Grasp the cube to the bowl` | `Grasp the pen to the box` | `Grasp the cube into the closed top drawer` |
+| --- | --- | --- |
+| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.jpg)](assets/rebot_grasp_the_cube_to_the_bowl.mp4) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.jpg)](assets/rebot_grasp_the_pen_to_the_box.mp4) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.jpg)](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.mp4) |
 
 <a id="workflows"></a>
 

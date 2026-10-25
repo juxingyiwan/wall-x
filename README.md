@@ -28,11 +28,11 @@ Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, 
 
 ## ReBot: task demonstrations
 
-Click a preview to watch the complete demonstration: moving the cube into the bowl on the left, and the pen into the box on the right. The headings use the full task instructions passed to the policy.
+Click a preview to watch the complete demonstration: moving the cube into the bowl, moving the pen into the box, and opening the drawer to place the cube inside. Each heading is the full task instruction passed to the policy.
 
-| `Grasp the cube to the bowl` | `Grasp the pen to the box` |
-| --- | --- |
-| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.jpg)](assets/rebot_grasp_the_cube_to_the_bowl.mp4) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.jpg)](assets/rebot_grasp_the_pen_to_the_box.mp4) |
+| `Grasp the cube to the bowl` | `Grasp the pen to the box` | `Grasp the cube into the closed top drawer` |
+| --- | --- | --- |
+| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.jpg)](assets/rebot_grasp_the_cube_to_the_bowl.mp4) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.jpg)](assets/rebot_grasp_the_pen_to_the_box.mp4) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.jpg)](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.mp4) |
 
 <a id="workflows"></a>
 
