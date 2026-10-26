@@ -18,21 +18,23 @@ Built on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), th
 
 ## ReBot: Wall-OSS-0.5 with and without RTC
 
-Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, disabled on the right**. Click the preview to watch the original side-by-side comparison.
+Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, disabled on the right**. The silent animation shows the complete comparison at its original speed. Click it to open the full-resolution video player.
 
-[![Wall-OSS-0.5 comparison: RTC enabled on the left, disabled on the right](assets/rebot_walloss05_rtc_comparison.jpg)](assets/rebot_walloss05_rtc_comparison.mp4)
+[![Wall-OSS-0.5 comparison: RTC enabled on the left, disabled on the right](assets/rebot_walloss05_rtc_comparison.gif)](https://juxingyiwan.github.io/wall-x/#rtc)
 
-[Play comparison](assets/rebot_walloss05_rtc_comparison.mp4) · [Operating steps](docs/rebot.md#operate) · [Action-padding notes and ablation](#action-padding)
+[Play comparison](https://juxingyiwan.github.io/wall-x/#rtc) · [Operating steps](docs/rebot.md#operate) · [Action-padding notes and ablation](#action-padding)
 
 <a id="rebot-demos"></a>
 
 ## ReBot: task demonstrations
 
-Click a preview to watch the complete demonstration: moving the cube into the bowl, moving the pen into the box, and opening the drawer to place the cube inside. Each heading is the full task instruction passed to the policy.
+The silent animations show each complete demonstration at its original speed. Click a preview to play the full-resolution video with sound and fullscreen controls. Each heading is the full task instruction passed to the policy.
+
+**[Watch all robot demonstrations](https://juxingyiwan.github.io/wall-x/)**
 
 | `Grasp the cube to the bowl` | `Grasp the pen to the box` | `Grasp the cube into the closed top drawer` |
 | --- | --- | --- |
-| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.jpg)](assets/rebot_grasp_the_cube_to_the_bowl.mp4) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.jpg)](assets/rebot_grasp_the_pen_to_the_box.mp4) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.jpg)](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.mp4) |
+| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/#drawer) |
 
 <a id="workflows"></a>
 
@@ -171,9 +173,9 @@ This experiment was motivated by action jitter observed during ReBot deployment 
 
 Wall-OSS-0.5 was trained on 100 demonstrations for 12 epochs to open a drawer and place a block inside. RTC is enabled in both runs; only action padding alignment changes: aligned on the left, unaligned on the right.
 
-[![Action padding on the robot: aligned on the left, unaligned on the right, with RTC enabled in both runs](assets/rebot_walloss05_padding_comparison.jpg)](assets/rebot_walloss05_padding_comparison.mp4)
+[![Action padding on the robot: aligned on the left, unaligned on the right, with RTC enabled in both runs](assets/rebot_walloss05_padding_comparison.gif)](https://juxingyiwan.github.io/wall-x/#padding)
 
-[Play the comparison video](assets/rebot_walloss05_padding_comparison.mp4)
+[Play the comparison video](https://juxingyiwan.github.io/wall-x/#padding)
 
 <a id="padding-offline"></a>
 

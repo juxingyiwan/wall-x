@@ -1,0 +1,47 @@
+name: Publish robot demos
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - demo-site/**
+      - assets/rebot_*.mp4
+      - assets/rebot_*.jpg
+      - .github/workflows/demo-pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'juxingyiwan/wall-x'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/configure-pages@v5
+      - name: Package the video gallery
+        run: |
+          mkdir -p build/demo-site/assets
+          cp demo-site/index.html build/demo-site/index.html
+          cp assets/rebot_*.mp4 assets/rebot_*.jpg build/demo-site/assets/
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: build/demo-site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

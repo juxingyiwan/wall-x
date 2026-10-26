@@ -27,7 +27,7 @@ repos:
     rev: v4.5.0
     hooks:
       - id: check-added-large-files
-        exclude: ^assets/(rebot_walloss05_(rtc|padding)_comparison|rebot_grasp_the_(cube_to_the_bowl|pen_to_the_box|cube_into_the_closed_top_drawer))\.mp4$
+        exclude: ^assets/(rebot_walloss05_(rtc|padding)_comparison|rebot_grasp_the_(cube_to_the_bowl|pen_to_the_box|cube_into_the_closed_top_drawer))\.(mp4|gif)$
       - id: check-added-large-files
         name: check task and RTC demo video size (5 MiB limit)
         files: ^assets/(rebot_walloss05_rtc_comparison|rebot_grasp_the_(cube_to_the_bowl|pen_to_the_box|cube_into_the_closed_top_drawer))\.mp4$
@@ -36,6 +36,10 @@ repos:
         name: check padding demo video size (10 MiB limit)
         files: ^assets/rebot_walloss05_padding_comparison\.mp4$
         args: [--maxkb=10240]
+      - id: check-added-large-files
+        name: check demo preview size (4 MiB limit)
+        files: ^assets/(rebot_walloss05_(rtc|padding)_comparison|rebot_grasp_the_(cube_to_the_bowl|pen_to_the_box|cube_into_the_closed_top_drawer))\.gif$
+        args: [--maxkb=4096]
       - id: check-ast
       - id: check-case-conflict
       - id: check-merge-conflict

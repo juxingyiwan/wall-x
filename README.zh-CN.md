@@ -18,21 +18,23 @@
 
 ## ReBot：Wall-OSS-0.5 与 RTC
 
-Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧未开启 RTC**。点击预览图观看原始并排对比视频。
+Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧未开启 RTC**。下方无声动图按原速展示完整对比，点击即可打开原分辨率视频播放器。
 
-[![Wall-OSS-0.5 真机对比：左侧开启 RTC，右侧未开启 RTC](assets/rebot_walloss05_rtc_comparison.jpg)](assets/rebot_walloss05_rtc_comparison.mp4)
+[![Wall-OSS-0.5 真机对比：左侧开启 RTC，右侧未开启 RTC](assets/rebot_walloss05_rtc_comparison.gif)](https://juxingyiwan.github.io/wall-x/#rtc)
 
-[播放对比视频](assets/rebot_walloss05_rtc_comparison.mp4) · [运行步骤](docs/rebot.zh-CN.md#operate) · [Action padding 技术说明与消融](#action-padding)
+[播放对比视频](https://juxingyiwan.github.io/wall-x/#rtc) · [运行步骤](docs/rebot.zh-CN.md#operate) · [Action padding 技术说明与消融](#action-padding)
 
 <a id="rebot-demos"></a>
 
 ## ReBot：任务演示
 
-点击预览图观看完整演示：将方块抓取到碗中、将笔抓取到盒中，以及打开抽屉并将方块放入。各标题均为传给策略的完整任务指令。
+下方无声动图按原速展示每段完整演示。点击预览图可播放原分辨率视频，支持声音和全屏控制。各标题均为传给策略的完整任务指令。
+
+**[观看全部真机演示](https://juxingyiwan.github.io/wall-x/)**
 
 | `Grasp the cube to the bowl` | `Grasp the pen to the box` | `Grasp the cube into the closed top drawer` |
 | --- | --- | --- |
-| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.jpg)](assets/rebot_grasp_the_cube_to_the_bowl.mp4) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.jpg)](assets/rebot_grasp_the_pen_to_the_box.mp4) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.jpg)](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.mp4) |
+| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/#drawer) |
 
 <a id="workflows"></a>
 
@@ -171,9 +173,9 @@ ReBot 需要 B601 机械臂、两路相机和兼容的训练 checkpoint。GPU �
 
 Wall-OSS-0.5 使用 100 条演示、训练 12 个 epoch，执行“开抽屉 → 方块放入抽屉”。两组均开启 RTC，仅切换 action padding 对齐：左侧已对齐，右侧未对齐。
 
-[![Action padding 真机对比：左侧已对齐，右侧未对齐，两组均开启 RTC](assets/rebot_walloss05_padding_comparison.jpg)](assets/rebot_walloss05_padding_comparison.mp4)
+[![Action padding 真机对比：左侧已对齐，右侧未对齐，两组均开启 RTC](assets/rebot_walloss05_padding_comparison.gif)](https://juxingyiwan.github.io/wall-x/#padding)
 
-[播放对比视频](assets/rebot_walloss05_padding_comparison.mp4)
+[播放对比视频](https://juxingyiwan.github.io/wall-x/#padding)
 
 <a id="padding-offline"></a>
 

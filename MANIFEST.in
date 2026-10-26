@@ -11,10 +11,22 @@ include CONTRIBUTING.md
 include .github/ISSUE_TEMPLATE/bug_report.md
 include assets/QRcode_community.jpg
 include assets/libero_training_loss.png
-include assets/rebot_walloss05_rtc_comparison.mp4
-include assets/rebot_walloss05_rtc_comparison.jpg
-include assets/rebot_walloss05_padding_comparison.mp4
+include assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif
+include assets/rebot_grasp_the_cube_into_the_closed_top_drawer.jpg
+include assets/rebot_grasp_the_cube_into_the_closed_top_drawer.mp4
+include assets/rebot_grasp_the_cube_to_the_bowl.gif
+include assets/rebot_grasp_the_cube_to_the_bowl.jpg
+include assets/rebot_grasp_the_cube_to_the_bowl.mp4
+include assets/rebot_grasp_the_pen_to_the_box.gif
+include assets/rebot_grasp_the_pen_to_the_box.jpg
+include assets/rebot_grasp_the_pen_to_the_box.mp4
+include assets/rebot_walloss05_padding_comparison.gif
 include assets/rebot_walloss05_padding_comparison.jpg
+include assets/rebot_walloss05_padding_comparison.mp4
+include assets/rebot_walloss05_rtc_comparison.gif
+include assets/rebot_walloss05_rtc_comparison.jpg
+include assets/rebot_walloss05_rtc_comparison.mp4
+recursive-include demo-site *.html
 include scripts/README.md
 include workspace/README.md
 include workspace/TRAIN_ARRANGE_3_FLOWERS.md
