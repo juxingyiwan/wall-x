@@ -1,6 +1,6 @@
 # Wall-X：LIBERO、RoboTwin 2.0 与 ReBot
 
-[English](README.md) · [上游 Wall-X](https://github.com/X-Square-Robot/wall-x) · [全部 CI 检查](https://github.com/juxingyiwan/wall-x/actions)
+[English](README.md) · [视频展厅](https://juxingyiwan.github.io/wall-x/showcase.html) · [上游 Wall-X](https://github.com/X-Square-Robot/wall-x) · [全部 CI 检查](https://github.com/juxingyiwan/wall-x/actions)
 
 [![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
 
@@ -30,11 +30,11 @@ Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧�
 
 下方无声动图按原速展示每段完整演示。点击预览图可播放原分辨率视频，支持声音和全屏控制。各标题均为传给策略的完整任务指令。
 
-**[观看全部真机演示](https://juxingyiwan.github.io/wall-x/)**
+**[观看视频展厅](https://juxingyiwan.github.io/wall-x/showcase.html)**
 
 | `Grasp the cube to the bowl` | `Grasp the pen to the box` | `Grasp the cube into the closed top drawer` |
 | --- | --- | --- |
-| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/#drawer) |
+| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
 
 <a id="workflows"></a>
 

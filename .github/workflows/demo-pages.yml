@@ -27,7 +27,7 @@ jobs:
       - name: Package the video gallery
         run: |
           mkdir -p build/demo-site/assets
-          cp demo-site/index.html build/demo-site/index.html
+          cp demo-site/*.html build/demo-site/
           cp assets/rebot_*.mp4 assets/rebot_*.jpg build/demo-site/assets/
       - uses: actions/upload-pages-artifact@v4
         with:

@@ -1,6 +1,6 @@
 # Wall-X: LIBERO, RoboTwin 2.0 and ReBot
 
-[中文](README.zh-CN.md) · [Upstream Wall-X](https://github.com/X-Square-Robot/wall-x) · [All CI checks](https://github.com/juxingyiwan/wall-x/actions)
+[中文](README.zh-CN.md) · [Video showcase](https://juxingyiwan.github.io/wall-x/showcase.html) · [Upstream Wall-X](https://github.com/X-Square-Robot/wall-x) · [All CI checks](https://github.com/juxingyiwan/wall-x/actions)
 
 [![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
 
@@ -30,11 +30,11 @@ Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, 
 
 The silent animations show each complete demonstration at its original speed. Click a preview to play the full-resolution video with sound and fullscreen controls. Each heading is the full task instruction passed to the policy.
 
-**[Watch all robot demonstrations](https://juxingyiwan.github.io/wall-x/)**
+**[Watch the video showcase](https://juxingyiwan.github.io/wall-x/showcase.html)**
 
 | `Grasp the cube to the bowl` | `Grasp the pen to the box` | `Grasp the cube into the closed top drawer` |
 | --- | --- | --- |
-| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/#drawer) |
+| [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
 
 <a id="workflows"></a>
 
