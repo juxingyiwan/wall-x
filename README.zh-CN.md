@@ -1,6 +1,6 @@
 # Wall-X：LIBERO、RoboTwin 2.0 与 ReBot
 
-[English](README.md) · [▶ 视频展厅](https://juxingyiwan.github.io/wall-x/showcase.html) · [上游 Wall-X](https://github.com/X-Square-Robot/wall-x) · [贡献指南](CONTRIBUTING.zh-CN.md) · [全部 CI 检查](https://github.com/juxingyiwan/wall-x/actions)
+[English](README.md) · [<img src="assets/play-circle.svg" width="16" height="16" alt=""> 视频展厅](https://juxingyiwan.github.io/wall-x/showcase.html) · [上游 Wall-X](https://github.com/X-Square-Robot/wall-x) · [贡献指南](CONTRIBUTING.zh-CN.md) · [全部 CI 检查](https://github.com/juxingyiwan/wall-x/actions)
 
 [![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
 
@@ -22,7 +22,7 @@ Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧�
 
 [![Wall-OSS-0.5 真机对比：左侧开启 RTC，右侧未开启 RTC](assets/rebot_walloss05_rtc_comparison.gif)](https://juxingyiwan.github.io/wall-x/#rtc)
 
-[▶ 播放 RTC 对比 · 19.9 秒](https://juxingyiwan.github.io/wall-x/#rtc) · [运行步骤](docs/rebot.zh-CN.md#operate) · [Action padding 技术说明与消融](#action-padding)
+[<img src="assets/play-circle.svg" width="16" height="16" alt=""> 播放 RTC 对比 · 19.9 秒](https://juxingyiwan.github.io/wall-x/#rtc) · [运行步骤](docs/rebot.zh-CN.md#operate) · [Action padding 技术说明与消融](#action-padding)
 
 <a id="rebot-demos"></a>
 
@@ -30,12 +30,12 @@ Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧�
 
 下方无声动图按原速展示每段完整演示。点击预览图可播放原分辨率视频，支持声音和全屏控制。各标题均为传给策略的完整任务指令。
 
-[▶ 视频展厅](https://juxingyiwan.github.io/wall-x/showcase.html)
+[<img src="assets/play-circle.svg" width="16" height="16" alt=""> 视频展厅](https://juxingyiwan.github.io/wall-x/showcase.html)
 
 | `Grasp the cube to the bowl` | `Grasp the pen to the box` | `Grasp the cube into the closed top drawer` |
 | --- | --- | --- |
 | [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
-| [▶ 播放视频 · 12.0 秒](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [▶ 播放视频 · 11.4 秒](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [▶ 播放视频 · 13.4 秒](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
+| [<img src="assets/play-circle.svg" width="16" height="16" alt=""> 播放视频 · 12.0 秒](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [<img src="assets/play-circle.svg" width="16" height="16" alt=""> 播放视频 · 11.4 秒](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [<img src="assets/play-circle.svg" width="16" height="16" alt=""> 播放视频 · 13.4 秒](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
 
 <a id="workflows"></a>
 
@@ -176,7 +176,7 @@ Wall-OSS-0.5 使用 100 条演示、训练 12 个 epoch，执行“开抽屉 →
 
 [![Action padding 真机对比：左侧已对齐，右侧未对齐，两组均开启 RTC](assets/rebot_walloss05_padding_comparison.gif)](https://juxingyiwan.github.io/wall-x/#padding)
 
-[▶ 播放 Padding 对比 · 16.0 秒](https://juxingyiwan.github.io/wall-x/#padding)
+[<img src="assets/play-circle.svg" width="16" height="16" alt=""> 播放 Padding 对比 · 16.0 秒](https://juxingyiwan.github.io/wall-x/#padding)
 
 <a id="padding-offline"></a>
 
