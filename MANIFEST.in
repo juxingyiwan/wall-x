@@ -26,6 +26,7 @@ include assets/rebot_walloss05_padding_comparison.mp4
 include assets/rebot_walloss05_rtc_comparison.gif
 include assets/rebot_walloss05_rtc_comparison.jpg
 include assets/rebot_walloss05_rtc_comparison.mp4
+recursive-include assets/video-badges *.svg
 recursive-include demo-site *.html
 include scripts/README.md
 include workspace/README.md
