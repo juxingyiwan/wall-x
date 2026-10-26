@@ -64,4 +64,3 @@ global-exclude __pycache__ *.py[cod]
 prune .pytest_cache
 prune deployment/.pytest_cache
 prune deployment/client/.pytest_cache
-include assets/play-circle.svg
