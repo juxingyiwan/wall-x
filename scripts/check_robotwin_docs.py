@@ -14,6 +14,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ["README.md", "README.zh-CN.md", "docs/robotwin.md", "docs/robotwin.zh-CN.md"]
 ENTRY_MODULES = {
+    "wall_x.robotwin.audit_source": "wall_x/robotwin/audit_source.py",
+    "wall_x.robotwin.collect_development": "wall_x/robotwin/collect_development.py",
     "scripts/train_robotwin.py": "wall_x/robotwin/train.py",
     "scripts/infer_robotwin.py": "wall_x/robotwin/inproc.py",
     "scripts/run_robotwin.sh": "wall_x/robotwin/inproc.py",

@@ -14,15 +14,20 @@ Provide an NVIDIA driver, C/C++ build tools and a toolkit matching Torch 2.10. T
 conda env create -f environments/python310.yml -n wallx-robotwin-model
 conda activate wallx-robotwin-model
 conda install -c conda-forge ffmpeg=8
+conda install -c nvidia cuda-toolkit=12.8
+python -m pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
+  --index-url https://download.pytorch.org/whl/cu128
 python -m pip install -r environments/requirements/lerobot-model.txt
 python -m pip check
 ```
 
-With a compatible toolkit available, set `CUDA_HOME` to its root (use `$CONDA_PREFIX` for a toolkit installed in this environment). Keep scheduler-provided `CUDA_VISIBLE_DEVICES` on a cluster. Run the GPU build inside an allocation:
+The commands above install the CUDA 12.8 toolkit and cu128 PyTorch in this environment. Set the toolkit paths after each environment activation. Keep scheduler-provided `CUDA_VISIBLE_DEVICES` on a cluster and build on an allocated GPU:
 
 ```bash
+export CUDA_HOME="$CONDA_PREFIX"
+export PATH="$CUDA_HOME/bin:$PATH"
 nvcc --version
-python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.cuda.is_available()'
+python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.version.cuda == "12.8"; assert torch.cuda.is_available()'
 export FLASH_ATTN_CUDA_ARCHS=$(python -c 'import torch; print(torch.cuda.get_device_capability()[0] * 10)')
 MAX_JOBS=4 python -m pip install flash-attn==2.8.3 --no-build-isolation
 python -m pip install 'dmuon @ git+https://github.com/X-Square-Robot/dmuon.git@157f522b8570764c473b1a18939f4ebb36da5878'
@@ -68,15 +73,20 @@ The setup script fetches source only: RoboTwin `2eeec322d95799f537cbfe5f291a8220
 conda env create -f environments/python310.yml -n wallx-robotwin-sim
 conda activate wallx-robotwin-sim
 conda install -c conda-forge libgl
+conda install -c nvidia cuda-toolkit=12.1
 python -m pip install torch==2.4.1 torchvision==0.19.1 \
   --index-url https://download.pytorch.org/whl/cu121
 python -m pip install -r environments/requirements/robotwin-sim.txt
 ```
 
-Set `CUDA_HOME` to a locally provisioned toolkit compatible with this cu121 Torch build, then compile cuRobo and apply the version-checked compatibility patch:
+The simulator uses CUDA 12.1 and cu121 PyTorch. Set the toolkit paths after each simulator-environment activation, then compile cuRobo and apply the compatibility patch:
 
 ```bash
+export CUDA_HOME="$CONDA_PREFIX"
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 nvcc --version
+python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.version.cuda == "12.1"'
 python -m pip install --no-build-isolation --no-deps -e third_party/RoboTwin/envs/curobo
 python scripts/patch_robotwin_sim.py
 python -m pip check
@@ -201,20 +211,61 @@ Evaluation used `demo_clean` and `demo_randomized`, unseen instructions (`--inst
 
 <a id="full-data"></a>
 
-## 8. Optional prepared full-data route
+## 8. Full-data route
 
-The full template `workspace/example/robotwin_full_v1.yml` uses eight GPUs, effective batch 256 and 25,000 updates. It targets [robbyant/robotwin-clean-and-aug-lerobot](https://huggingface.co/datasets/robbyant/robotwin-clean-and-aug-lerobot) revision `595d4acc7e026aa57afba218f4170c6d79e39103` (27,500 source episodes, 6,077,247 training frames, 50 Hz). Prepare an audit JSON and independently collected development data with the fields listed below. For a quick start, use the two-task route above.
+The full template `workspace/example/robotwin_full_v1.yml` uses eight GPUs, effective batch 256 and 25,000 updates. It targets [robbyant/robotwin-clean-and-aug-lerobot](https://huggingface.co/datasets/robbyant/robotwin-clean-and-aug-lerobot) revision `595d4acc7e026aa57afba218f4170c6d79e39103`: 50 tasks, 27,500 training episodes and 6,077,247 frames, with a 50 Hz file timebase. Use the two-task route above for an initial workflow check.
 
-Required inputs: one LeRobot v2.1 directory per source folder; audit fields `repo`, `revision`, `rows[{folder, task}]`; per-task development `complete.json` with `instruction`, `frames`, `seed`, `task_config`; `vectors.npz` with finite aligned `[frames,16]` state/action arrays (`xyz,WXYZ,gripper` per arm); three aligned 50 Hz videos named `face_view.mp4`, `left_wrist_view.mp4`, `right_wrist_view.mp4`.
+**Download and generate the manifest.** These commands download the LeRobot v2.1 source directories and build the converter's audit JSON from `meta/info.json` and `meta/episodes.jsonl`. The audit checks paired clean/randomized tasks, contiguous episode indices, 50/500 episodes per task and total frame counts, and records metadata SHA256 hashes. The source is about 443 GB; allow space for an additional video copy when converting with `copy`.
 
 ```bash
+conda activate wallx-robotwin-model
+hf download robbyant/robotwin-clean-and-aug-lerobot \
+  --repo-type dataset --revision 595d4acc7e026aa57afba218f4170c6d79e39103 \
+  --include 'lerobot_robotwin_eef_*/*' --local-dir /path/to/source-lerobot
+python -m wall_x.robotwin.audit_source \
+  --source-root /path/to/source-lerobot --output /path/to/frame-count-audit.json
+```
+
+**Collect the independent development set.** After installing the simulator and assets in section 3, run on an allocated GPU. Each task gets one expert-successful `demo_clean` episode from its own seed range starting at 500000, separate from the evaluation range starting at 100000 in this guide. The loop stops on a collection error; use its output to continue unfinished tasks.
+
+```bash
+conda activate wallx-robotwin-sim
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+mapfile -t TASKS < <(python -c 'import json; print("\n".join(sorted({r["task"] for r in json.load(open("/path/to/frame-count-audit.json"))["rows"]})))')
+task_index=0
+for task in "${TASKS[@]}"; do
+  python -m wall_x.robotwin.collect_development \
+    --robotwin-root "$PWD/third_party/RoboTwin" --task "$task" \
+    --seed "$((500000 + task_index * 1000))" --max-attempts 100 \
+    --output "/path/to/independent-dev/$task" || break
+  task_index=$((task_index + 1))
+done
+```
+
+Each task produces `complete.json` (instruction, successful seed, rejected seeds and frame count), `vectors.npz`, and `face_view.mp4`, `left_wrist_view.mp4`, `right_wrist_view.mp4`. Videos are 640 × 480 with a 50 Hz file timebase. Collection retains the expert's `save_freq=15`: each observation is paired with the next sampled pose as its action target, and the final frame is not a separate sample. The converter does not shift actions again. The 50 Hz file timebase matches the source dataset; it is not the physical simulation sampling frequency. Each task requires a new output directory; `complete.json` marks successful completion.
+
+**Convert and train.** Switch back to the model environment:
+
+```bash
+conda activate wallx-robotwin-model
 python -m wall_x.robotwin.convert_lerobot \
   --source-root /path/to/source-lerobot --audit /path/to/frame-count-audit.json \
   --dev-root /path/to/independent-dev --video-storage copy \
   --output /path/to/prepared-full-dataset
 ```
 
-Use a new output directory, edit the full template and recompute its training statistics. Keep `meta/video_sources.json` with the data. Use `copy` to preserve inputs; `move` consumes source files on the same filesystem. Rebuilding relocated data additionally accepts `--video-index`.
+Expected: 27,500 training episodes and 50 independent validation episodes, plus `meta/episode_split.json`, `meta/robotwin_provenance.json` and `meta/video_sources.json`. Use a new output directory, point the full template's data and split paths to it, then recompute training-only statistics and train as in section 5. Retain the video-source manifest; `copy` preserves inputs, while `move` relocates source videos on the same filesystem. Rebuilding relocated data accepts `--video-index`.
+
+For five tasks only, add `--tasks open_microwave click_bell stack_blocks_three place_shoe put_object_cabinet` to the audit command; the collection loop will read those five tasks. Also pass all `rows[].folder` entries from that audit to the converter's `--folders` (two directories per task) to enable subset mode. Expect 2,750 training and five validation episodes. Use the [five-task settings](#reported-settings) for training and evaluation.
+
+```bash
+mapfile -t FOLDERS < <(python -c 'import json; print("\n".join(r["folder"] for r in json.load(open("/path/to/frame-count-audit.json"))["rows"]))')
+python -m wall_x.robotwin.convert_lerobot \
+  --source-root /path/to/source-lerobot --audit /path/to/frame-count-audit.json \
+  --dev-root /path/to/independent-dev --video-storage copy \
+  --folders "${FOLDERS[@]}" --output /path/to/prepared-five-task-dataset
+```
 
 <a id="troubleshooting"></a>
 

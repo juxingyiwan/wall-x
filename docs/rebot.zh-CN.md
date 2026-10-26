@@ -138,9 +138,20 @@ test -e deployment/machines/standalone.local.yml || cp deployment/machines/stand
 
 | 文件 | 使用前设置 |
 | --- | --- |
-| `deployment/local/profile.yml` | `model.checkpoint_id`、真实权重 SHA256、`norm_key`、padding；`client_config: client.yml` 选择相邻私有客户端文件 |
+| `deployment/local/profile.yml` | `model.checkpoint_id`、`model.epoch`、`model.step`、真实权重 SHA256、`norm_key`、padding；`client_config: client.yml` 选择相邻私有客户端文件 |
 | `deployment/local/client.yml` | `task` 填完整训练指令，设置输出目录、控制/RTC/显示选项 |
 | `deployment/machines/standalone.local.yml` | checkpoint 根目录、真实 CAN/相机设备、已验证的相机角色及既有共享锁路径 |
+
+`checkpoint_id` 的格式为 `experiment/epoch_step`，后缀必须与 `epoch`、`step` 完全一致。例如 checkpoint 目录为 `my_experiment/3_800` 时，在完整配置的 `model` 节中同步设置：
+
+```yaml
+model:
+  checkpoint_id: my_experiment/3_800
+  epoch: 3
+  step: 800
+```
+
+`epoch` 从 0 开始，`step` 为正整数；沿用实际 checkpoint 的目录名称。将 `checkpoint_sha256` 替换为上面 `sha256sum` 输出的 64 位值，`norm_key` 使用该 checkpoint 保存的键。
 
 先将采集图像与训练视图核对，再设 `camera_mapping_verified: true`；相机角色使用不同的稳定设备路径。机器覆盖文件负责主机/设备设置，任务/控制/RTC 放在客户端 YAML；显式 CLI 可覆盖受支持值。检查实际生效配置：
 

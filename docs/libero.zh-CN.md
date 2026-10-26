@@ -14,17 +14,22 @@
 conda env create -f environments/python310.yml -n wallx-libero
 conda activate wallx-libero
 conda install -c conda-forge ffmpeg=8 libgl libegl mesalib
+conda install -c nvidia cuda-toolkit=12.8
+python -m pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
+  --index-url https://download.pytorch.org/whl/cu128
 python -m pip install -r environments/requirements/lerobot-model.txt -r requirements-libero.txt
 python -m pip check
 ```
 
-仅训练时可省略 `-r requirements-libero.txt`，仿真评估前再安装。如果尚未配置匹配的工具链，先按 Torch 的 CUDA 构建版本安装并设置 `CUDA_HOME`，再继续。
+仅训练时可省略 `-r requirements-libero.txt`，仿真评估前再安装。
 
-准备兼容工具链后，将 `CUDA_HOME` 设为其根目录（工具链安装在当前环境中时使用 `$CONDA_PREFIX`）。在集群保留调度器提供的 `CUDA_VISIBLE_DEVICES`，在已有算力分配内执行 GPU 构建：
+上述命令在当前环境安装 CUDA 12.8 工具链及 cu128 PyTorch。每次重新激活环境后，设置工具链路径；在集群保留调度器提供的 `CUDA_VISIBLE_DEVICES`，在已分配的 GPU 上执行构建：
 
 ```bash
+export CUDA_HOME="$CONDA_PREFIX"
+export PATH="$CUDA_HOME/bin:$PATH"
 nvcc --version
-python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.cuda.is_available()'
+python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.version.cuda == "12.8"; assert torch.cuda.is_available()'
 export FLASH_ATTN_CUDA_ARCHS=$(python -c 'import torch; print(torch.cuda.get_device_capability()[0] * 10)')
 MAX_JOBS=4 python -m pip install flash-attn==2.8.3 --no-build-isolation
 python -m pip install 'dmuon @ git+https://github.com/X-Square-Robot/dmuon.git@157f522b8570764c473b1a18939f4ebb36da5878'

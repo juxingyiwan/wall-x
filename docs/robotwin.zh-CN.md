@@ -14,15 +14,20 @@
 conda env create -f environments/python310.yml -n wallx-robotwin-model
 conda activate wallx-robotwin-model
 conda install -c conda-forge ffmpeg=8
+conda install -c nvidia cuda-toolkit=12.8
+python -m pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
+  --index-url https://download.pytorch.org/whl/cu128
 python -m pip install -r environments/requirements/lerobot-model.txt
 python -m pip check
 ```
 
-准备兼容工具链后，将 `CUDA_HOME` 设为其根目录（工具链安装在当前环境中时使用 `$CONDA_PREFIX`）。在集群保留调度器提供的 `CUDA_VISIBLE_DEVICES`，在已有算力分配内执行 GPU 构建：
+上述命令在当前环境安装 CUDA 12.8 工具链及 cu128 PyTorch。每次重新激活环境后，设置工具链路径；在集群保留调度器提供的 `CUDA_VISIBLE_DEVICES`，在已分配的 GPU 上执行构建：
 
 ```bash
+export CUDA_HOME="$CONDA_PREFIX"
+export PATH="$CUDA_HOME/bin:$PATH"
 nvcc --version
-python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.cuda.is_available()'
+python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.version.cuda == "12.8"; assert torch.cuda.is_available()'
 export FLASH_ATTN_CUDA_ARCHS=$(python -c 'import torch; print(torch.cuda.get_device_capability()[0] * 10)')
 MAX_JOBS=4 python -m pip install flash-attn==2.8.3 --no-build-isolation
 python -m pip install 'dmuon @ git+https://github.com/X-Square-Robot/dmuon.git@157f522b8570764c473b1a18939f4ebb36da5878'
@@ -68,15 +73,20 @@ python scripts/train_robotwin.py --help
 conda env create -f environments/python310.yml -n wallx-robotwin-sim
 conda activate wallx-robotwin-sim
 conda install -c conda-forge libgl
+conda install -c nvidia cuda-toolkit=12.1
 python -m pip install torch==2.4.1 torchvision==0.19.1 \
   --index-url https://download.pytorch.org/whl/cu121
 python -m pip install -r environments/requirements/robotwin-sim.txt
 ```
 
-将 `CUDA_HOME` 设为本机已配置、兼容 cu121 Torch 的工具链目录，再编译 cuRobo 并应用带版本检查的兼容补丁：
+模拟器使用 CUDA 12.1 和 cu121 PyTorch。每次重新激活模拟器环境后设置工具链路径，再编译 cuRobo 并应用兼容补丁：
 
 ```bash
+export CUDA_HOME="$CONDA_PREFIX"
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 nvcc --version
+python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.version.cuda == "12.1"'
 python -m pip install --no-build-isolation --no-deps -e third_party/RoboTwin/envs/curobo
 python scripts/patch_robotwin_sim.py
 python -m pip check
@@ -201,20 +211,61 @@ Dry run 检查保存配置与 normalizer 兼容性，不加载 GPU 权重、不�
 
 <a id="full-data"></a>
 
-## 8. 可选的已备齐全量数据路线
+## 8. 全量数据路线
 
-全量模板 `workspace/example/robotwin_full_v1.yml` 使用 8 张 GPU、有效 batch 256、25,000 次更新，面向 [robbyant/robotwin-clean-and-aug-lerobot](https://huggingface.co/datasets/robbyant/robotwin-clean-and-aug-lerobot) 的 `595d4acc7e026aa57afba218f4170c6d79e39103` 版本（27,500 个源 episode、6,077,247 个训练帧、50 Hz）。另需准备含以下字段的审计 JSON 和独立采集的开发数据。快速入门可使用上面的双任务路线。
+全量模板 `workspace/example/robotwin_full_v1.yml` 使用 8 张 GPU、有效 batch 256 和 25,000 次更新。数据为 [robbyant/robotwin-clean-and-aug-lerobot](https://huggingface.co/datasets/robbyant/robotwin-clean-and-aug-lerobot) 的固定版本 `595d4acc7e026aa57afba218f4170c6d79e39103`：50 个任务、27,500 条训练 episode、6,077,247 帧，文件时间基准为 50 Hz。首次验证流程可使用上面的双任务路线。
 
-需要：每个源文件夹对应一份 LeRobot v2.1 数据；审计字段 `repo`、`revision`、`rows[{folder, task}]`；每任务开发数据的 `complete.json` 含 `instruction`、`frames`、`seed`、`task_config`；`vectors.npz` 的 state/action 是有限且对齐的 `[frames,16]` 数组（每臂为 `xyz,WXYZ,gripper`）；三路对齐的 50 Hz 录像 `face_view.mp4`、`left_wrist_view.mp4`、`right_wrist_view.mp4`。
+**下载并生成清单。** 以下命令下载 LeRobot v2.1 源目录，并从 `meta/info.json` 与 `meta/episodes.jsonl` 生成转换器的 audit JSON。清单检查 clean/randomized 任务配对、连续 episode 编号、每任务 50/500 条及总帧数，并保存元数据 SHA256。源数据约 443 GB；使用 `copy` 转换时另留一份视频副本的空间。
 
 ```bash
+conda activate wallx-robotwin-model
+hf download robbyant/robotwin-clean-and-aug-lerobot \
+  --repo-type dataset --revision 595d4acc7e026aa57afba218f4170c6d79e39103 \
+  --include 'lerobot_robotwin_eef_*/*' --local-dir /path/to/source-lerobot
+python -m wall_x.robotwin.audit_source \
+  --source-root /path/to/source-lerobot --output /path/to/frame-count-audit.json
+```
+
+**采集独立开发集。** 完成第 3 节模拟器与资源安装后，在已分配的 GPU 上运行以下命令。每个任务从独立种子区间采集一条专家成功的 `demo_clean` episode；种子从 500000 起，与本指南评测的 100000 起始区间分开。循环遇到采集错误即停止，可根据输出继续未完成任务。
+
+```bash
+conda activate wallx-robotwin-sim
+export LD_LIBRARY_PATH="$CONDA_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+mapfile -t TASKS < <(python -c 'import json; print("\n".join(sorted({r["task"] for r in json.load(open("/path/to/frame-count-audit.json"))["rows"]})))')
+task_index=0
+for task in "${TASKS[@]}"; do
+  python -m wall_x.robotwin.collect_development \
+    --robotwin-root "$PWD/third_party/RoboTwin" --task "$task" \
+    --seed "$((500000 + task_index * 1000))" --max-attempts 100 \
+    --output "/path/to/independent-dev/$task" || break
+  task_index=$((task_index + 1))
+done
+```
+
+每个任务输出 `complete.json`（指令、成功种子、拒绝种子与帧数）、`vectors.npz` 和 `face_view.mp4`、`left_wrist_view.mp4`、`right_wrist_view.mp4`。视频为 640 × 480、50 Hz 文件时间基准。采集沿用专家的 `save_freq=15`：以当前观测配下一采样姿态作为动作目标，末帧不单独作为样本；转换器不再次平移动作。50 Hz 是与源数据一致的文件时间基准，不代表物理仿真中的采样频率。每个任务的输出目录必须是新目录，`complete.json` 写入后才表示该条采集完成。
+
+**转换与训练。** 回到模型环境执行：
+
+```bash
+conda activate wallx-robotwin-model
 python -m wall_x.robotwin.convert_lerobot \
   --source-root /path/to/source-lerobot --audit /path/to/frame-count-audit.json \
   --dev-root /path/to/independent-dev --video-storage copy \
   --output /path/to/prepared-full-dataset
 ```
 
-使用新的输出目录，修改全量模板并重算其训练统计量。随数据保留 `meta/video_sources.json`。`copy` 保留输入，`move` 会消耗同文件系统中的源文件；重建迁移后的数据可额外传入 `--video-index`。
+应得到 27,500 条训练 episode 和 50 条独立 validation episode，以及 `meta/episode_split.json`、`meta/robotwin_provenance.json`、`meta/video_sources.json`。使用新输出目录，将全量模板中的数据路径和 split 路径指向该目录，然后按第 5 节重新计算训练集统计量并训练。保留视频来源清单；`copy` 保留输入，`move` 会移动同一文件系统中的源视频，重建已移动的数据可传 `--video-index`。
+
+仅准备五任务时，为 audit 命令添加 `--tasks open_microwave click_bell stack_blocks_three place_shoe put_object_cabinet`，采集循环会读取这五个任务。转换命令还需通过 `--folders` 传入该 audit 的全部 `rows[].folder`（五任务各两个目录），以启用子集模式；应得到 2,750 条训练及 5 条 validation episode。训练与评测参数使用[五任务设置](#reported-settings)。
+
+```bash
+mapfile -t FOLDERS < <(python -c 'import json; print("\n".join(r["folder"] for r in json.load(open("/path/to/frame-count-audit.json"))["rows"]))')
+python -m wall_x.robotwin.convert_lerobot \
+  --source-root /path/to/source-lerobot --audit /path/to/frame-count-audit.json \
+  --dev-root /path/to/independent-dev --video-storage copy \
+  --folders "${FOLDERS[@]}" --output /path/to/prepared-five-task-dataset
+```
 
 <a id="troubleshooting"></a>
 

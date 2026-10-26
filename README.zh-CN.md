@@ -52,6 +52,15 @@ git rev-parse HEAD
 | RoboTwin 2.0 仿真评估或训练 | 从[双任务数据示例](docs/robotwin.zh-CN.md#data)开始；已有训练 checkpoint 时先跑[评估预检](docs/robotwin.zh-CN.md#evaluate) | [English](docs/robotwin.md) · [中文](docs/robotwin.zh-CN.md) |
 | ReBot / B601 真机运行 | 准备[机器人与 checkpoint 配置](docs/rebot.zh-CN.md#configuration)，先用[录制观测回放](docs/rebot.zh-CN.md#replay)验证，再进入[真机操作](docs/rebot.zh-CN.md#operate) | [English](docs/rebot.md) · [中文](docs/rebot.zh-CN.md) |
 
+开始前按下表准备资源；下载与训练命令均在对应指南中。
+
+| 资源 | 获取方式 |
+| --- | --- |
+| Wall-OSS-0.5 基础权重与 Qwen processor | 按 [LIBERO](docs/libero.zh-CN.md#assets)、[RoboTwin](docs/robotwin.zh-CN.md#assets) 或 [ReBot](docs/rebot.zh-CN.md) 指南下载固定版本 |
+| LIBERO / RoboTwin 演示数据 | 下载指南中的公开数据；RoboTwin 全量路线另含独立开发集采集步骤 |
+| ReBot 演示数据与回放观测 | 自行采集，按 [ReBot 指南](docs/rebot.zh-CN.md#data) 转换 |
+| 三条路线的任务 checkpoint | 按指南训练生成，保留配置与归一化参数；本仓库尚未发布实验所用的任务权重 |
+
 模型训练与推理使用 Linux、NVIDIA GPU、CUDA 和 Conda。各场景使用独立环境；RoboTwin 另设模拟器环境，需要 NVIDIA/Vulkan 图形支持和模拟器资源。
 
 ReBot 需要 B601 机械臂、两路相机和兼容的训练 checkpoint。GPU 可位于机器人本机或独立模型服务器。指南命令均从仓库根目录执行，并将占位路径替换为实际路径。

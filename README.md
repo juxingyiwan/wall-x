@@ -52,6 +52,15 @@ git rev-parse HEAD
 | Evaluate or train on RoboTwin 2.0 | Start with the [two-task dataset](docs/robotwin.md#data); with a trained checkpoint, run the [evaluation dry run](docs/robotwin.md#evaluate) | [English](docs/robotwin.md) · [中文](docs/robotwin.zh-CN.md) |
 | Run ReBot / B601 | Prepare the [robot and checkpoint configuration](docs/rebot.md#configuration), then [replay recorded observations](docs/rebot.md#replay) before [robot operation](docs/rebot.md#operate) | [English](docs/rebot.md) · [中文](docs/rebot.zh-CN.md) |
 
+Prepare the following resources before starting; download and training commands are in each guide.
+
+| Resource | How to obtain it |
+| --- | --- |
+| Wall-OSS-0.5 foundation weights and Qwen processor | Download the pinned versions in the [LIBERO](docs/libero.md#assets), [RoboTwin](docs/robotwin.md#assets) or [ReBot](docs/rebot.md) guide |
+| LIBERO / RoboTwin demonstrations | Download the public datasets in the guides; the RoboTwin full-data route also includes independent development-set collection |
+| ReBot demonstrations and replay observations | Collect your own and convert them with the [ReBot guide](docs/rebot.md#data) |
+| Task checkpoints for all three workflows | Train using the guides and retain configuration and normalizers; this repository has not yet published the task weights used in the experiments |
+
 Model training and inference use Linux, an NVIDIA GPU, CUDA and Conda. Each workflow has its own environment; RoboTwin uses an additional simulator environment with NVIDIA/Vulkan graphics and simulator assets.
 
 ReBot requires a B601 arm, two cameras and a compatible trained checkpoint. The GPU can run on the robot host or on a separate model server. Run guide commands from the repository root and replace placeholder paths with your own.

@@ -14,17 +14,22 @@ Requirements: Conda, Python 3.10, a supported NVIDIA GPU/driver, host C/C++ buil
 conda env create -f environments/python310.yml -n wallx-libero
 conda activate wallx-libero
 conda install -c conda-forge ffmpeg=8 libgl libegl mesalib
+conda install -c nvidia cuda-toolkit=12.8
+python -m pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
+  --index-url https://download.pytorch.org/whl/cu128
 python -m pip install -r environments/requirements/lerobot-model.txt -r requirements-libero.txt
 python -m pip check
 ```
 
-For training only, omit `-r requirements-libero.txt`; install it before simulator evaluation. If a matching toolkit is not already provisioned, install one for the selected Torch CUDA build and set `CUDA_HOME` before continuing.
+For training only, omit `-r requirements-libero.txt`; install it before simulator evaluation.
 
-With a compatible toolkit available, set `CUDA_HOME` to its root (use `$CONDA_PREFIX` for a toolkit installed in this environment). Keep scheduler-provided `CUDA_VISIBLE_DEVICES` on a cluster. Run the GPU build inside an allocation:
+The commands above install the CUDA 12.8 toolkit and cu128 PyTorch in this environment. Set the toolkit paths after each environment activation. Keep scheduler-provided `CUDA_VISIBLE_DEVICES` on a cluster and build on an allocated GPU:
 
 ```bash
+export CUDA_HOME="$CONDA_PREFIX"
+export PATH="$CUDA_HOME/bin:$PATH"
 nvcc --version
-python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.cuda.is_available()'
+python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.version.cuda == "12.8"; assert torch.cuda.is_available()'
 export FLASH_ATTN_CUDA_ARCHS=$(python -c 'import torch; print(torch.cuda.get_device_capability()[0] * 10)')
 MAX_JOBS=4 python -m pip install flash-attn==2.8.3 --no-build-isolation
 python -m pip install 'dmuon @ git+https://github.com/X-Square-Robot/dmuon.git@157f522b8570764c473b1a18939f4ebb36da5878'

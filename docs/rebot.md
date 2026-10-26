@@ -138,9 +138,20 @@ test -e deployment/machines/standalone.local.yml || cp deployment/machines/stand
 
 | File | Set before use |
 | --- | --- |
-| `deployment/local/profile.yml` | `model.checkpoint_id`, actual weight SHA256, `norm_key`, padding; `client_config: client.yml` selects the adjacent private client file |
+| `deployment/local/profile.yml` | `model.checkpoint_id`, `model.epoch`, `model.step`, actual weight SHA256, `norm_key`, padding; `client_config: client.yml` selects the adjacent private client file |
 | `deployment/local/client.yml` | Full training instruction in `task`, output directory, control/RTC/display settings |
 | `deployment/machines/standalone.local.yml` | Checkpoint root, actual CAN/camera devices, verified camera roles and the existing shared lock paths |
+
+`checkpoint_id` has the form `experiment/epoch_step`; its suffix must match `epoch` and `step` exactly. For a checkpoint directory named `my_experiment/3_800`, set these fields together in the complete profile’s `model` section:
+
+```yaml
+model:
+  checkpoint_id: my_experiment/3_800
+  epoch: 3
+  step: 800
+```
+
+`epoch` is zero-based and `step` is a positive integer; retain the actual checkpoint directory name. Replace `checkpoint_sha256` with the 64-character value from `sha256sum` above, and use the checkpoint’s saved `norm_key`.
 
 Inspect captured images against the training views before setting `camera_mapping_verified: true`. Different camera roles need distinct stable device paths. Machine overrides select host/device settings; task/control/RTC belong in the client YAML. Explicit CLI options override supported values. Inspect the effective configuration:
 
