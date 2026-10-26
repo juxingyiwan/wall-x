@@ -1,6 +1,6 @@
 # Wall-X: LIBERO, RoboTwin 2.0 and ReBot
 
-[中文](README.zh-CN.md) · [![Video showcase](assets/video-badges/showcase.en.svg)](https://juxingyiwan.github.io/wall-x/showcase.html) · [Upstream Wall-X](https://github.com/X-Square-Robot/wall-x) · [All CI checks](https://github.com/juxingyiwan/wall-x/actions)
+[中文](README.zh-CN.md) · [▶ Video showcase](https://juxingyiwan.github.io/wall-x/showcase.html) · [Upstream Wall-X](https://github.com/X-Square-Robot/wall-x) · [Contributing](CONTRIBUTING.md) · [All CI checks](https://github.com/juxingyiwan/wall-x/actions)
 
 [![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
 
@@ -22,7 +22,7 @@ Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, 
 
 [![Wall-OSS-0.5 comparison: RTC enabled on the left, disabled on the right](assets/rebot_walloss05_rtc_comparison.gif)](https://juxingyiwan.github.io/wall-x/#rtc)
 
-[![Watch the RTC comparison](assets/video-badges/comparison.en.svg)](https://juxingyiwan.github.io/wall-x/#rtc) · [Operating steps](docs/rebot.md#operate) · [Action-padding notes and ablation](#action-padding)
+[▶ Watch RTC comparison · 19.9 s](https://juxingyiwan.github.io/wall-x/#rtc) · [Operating steps](docs/rebot.md#operate) · [Action-padding notes and ablation](#action-padding)
 
 <a id="rebot-demos"></a>
 
@@ -30,12 +30,12 @@ Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, 
 
 The silent animations show each complete demonstration at its original speed. Click a preview to play the full-resolution video with sound and fullscreen controls. Each heading is the full task instruction passed to the policy.
 
-[![Video showcase](assets/video-badges/showcase.en.svg)](https://juxingyiwan.github.io/wall-x/showcase.html)
+[▶ Video showcase](https://juxingyiwan.github.io/wall-x/showcase.html)
 
 | `Grasp the cube to the bowl` | `Grasp the pen to the box` | `Grasp the cube into the closed top drawer` |
 | --- | --- | --- |
 | [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
-| [![Watch: Grasp the cube to the bowl](assets/video-badges/demo.en.svg)](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [![Watch: Grasp the pen to the box](assets/video-badges/demo.en.svg)](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [![Watch: Grasp the cube into the closed top drawer](assets/video-badges/demo.en.svg)](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
+| [▶ Watch video · 12.0 s](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [▶ Watch video · 11.4 s](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [▶ Watch video · 13.4 s](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
 
 <a id="workflows"></a>
 
@@ -176,7 +176,7 @@ Wall-OSS-0.5 was trained on 100 demonstrations for 12 epochs to open a drawer an
 
 [![Action padding on the robot: aligned on the left, unaligned on the right, with RTC enabled in both runs](assets/rebot_walloss05_padding_comparison.gif)](https://juxingyiwan.github.io/wall-x/#padding)
 
-[![Watch the action padding comparison](assets/video-badges/comparison.en.svg)](https://juxingyiwan.github.io/wall-x/#padding)
+[▶ Watch padding comparison · 16.0 s](https://juxingyiwan.github.io/wall-x/#padding)
 
 <a id="padding-offline"></a>
 
