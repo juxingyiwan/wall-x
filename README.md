@@ -6,6 +6,8 @@
 
 Based on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), this repository provides LIBERO and RoboTwin 2.0 training and evaluation, plus ReBot / B601 deployment.
 
+[Get started](#workflows) · [Demos](#demos) · [Experimental results](#experiments) · [Original Wall-X docs](#upstream) · [Technical notes](#development)
+
 <a id="workflows"></a>
 
 ## Get started
@@ -25,11 +27,13 @@ cd wall-x
 
 Each guide contains the commands for the full workflow. For your first run, follow it in order. With a trained task checkpoint, complete environment and resource setup, then go directly to evaluation or robot configuration. Each workflow has its own environment, with a separate simulator environment for RoboTwin. The task checkpoints used for the reported experiments have not been released.
 
-[🎬 Robot demos](#rebot-demos) · [Experiment results](#experiments) · [Original Wall-X docs](#upstream) · [Technical notes](#development)
+<a id="demos"></a>
+
+## Demos
 
 <a id="rebot-results"></a>
 
-## ReBot: Wall-OSS-0.5 with and without RTC
+### ReBot: Wall-OSS-0.5 with and without RTC
 
 Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, disabled on the right**. The silent animation shows the complete comparison at its original speed. Click it to open the full-resolution video player.
 
@@ -39,7 +43,7 @@ Wall-OSS-0.5 on the real robot: **RTC (real-time chunking) enabled on the left, 
 
 <a id="rebot-demos"></a>
 
-## ReBot: task demonstrations
+### ReBot: task demonstrations
 
 The silent animations show each complete demonstration at its original speed. Click a preview to play the full-resolution video with sound and fullscreen controls. Each heading is the full task instruction passed to the policy.
 

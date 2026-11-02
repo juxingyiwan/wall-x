@@ -6,6 +6,8 @@
 
 基于 [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x)，提供 LIBERO、RoboTwin 2.0 的训练与评估，以及 ReBot / B601 真机部署。
 
+[开始使用](#workflows) · [演示](#demos) · [实验结果](#experiments) · [原生 Wall-X 文档](#upstream) · [技术开发说明](#development)
+
 <a id="workflows"></a>
 
 ## 开始使用
@@ -25,11 +27,13 @@ cd wall-x
 
 每份指南都包含完整流程的操作命令。首次使用请按顺序阅读；已有训练好的任务 checkpoint 时，完成环境和资源准备后，可直接进入评估或机器人配置。各场景使用独立环境，RoboTwin 另设模拟器环境。本仓库尚未发布实验所用的任务权重。
 
-[🎬 真机演示](#rebot-demos) · [实验结果](#experiments) · [原生 Wall-X 文档](#upstream) · [技术开发说明](#development)
+<a id="demos"></a>
+
+## 演示
 
 <a id="rebot-results"></a>
 
-## ReBot：Wall-OSS-0.5 与 RTC
+### ReBot：Wall-OSS-0.5 与 RTC
 
 Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧未开启 RTC**。下方无声动图按原速展示完整对比，点击即可打开原分辨率视频播放器。
 
@@ -39,7 +43,7 @@ Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧�
 
 <a id="rebot-demos"></a>
 
-## ReBot：任务演示
+### ReBot：任务演示
 
 下方无声动图按原速展示每段完整演示。点击预览图可播放原分辨率视频，支持声音和全屏控制。各标题均为传给策略的完整任务指令。
 
