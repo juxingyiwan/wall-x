@@ -2,49 +2,43 @@
 
 [中文](libero.zh-CN.md) · [Home](../README.md)
 
-Use this guide for Wall-OSS-0.5 with LeRobot-format LIBERO demonstrations. All commands run from the repository root on Linux. Choose [existing-checkpoint evaluation](#evaluate) after setup, or follow the full training sequence. Keep datasets, checkpoints and results outside the tracked source tree.
+Run all commands from the repository root on Linux and replace `/path/to/...` with your paths.
 
 <a id="environment"></a>
 
-## 1. Install an independent environment
+## 1. Install the environment
 
-Requirements: Conda, Python 3.10, a supported NVIDIA GPU/driver, host C/C++ build tools and a CUDA toolkit matching Torch 2.10. The driver alone does not provide `nvcc`. The following profile uses LeRobot 0.4.4, Transformers 4.57.6 and Hub 0.35.3; do not also install the native root `requirements.txt` into this environment.
+Install Conda, an NVIDIA GPU driver and C/C++ build tools. Build on the GPU that will run the model; use an allocated compute node on a cluster.
 
 ```bash
 conda env create -f environments/python310.yml -n wallx-libero
 conda activate wallx-libero
-conda install -c conda-forge ffmpeg=8 libgl libegl mesalib
-conda install -c nvidia cuda-toolkit=12.8
+conda install --override-channels -c conda-forge ffmpeg=8 libgl libegl mesalib=25.0.2
+conda install --override-channels -c nvidia -c conda-forge cuda-toolkit=12.8
+export CC=/usr/bin/gcc CXX=/usr/bin/g++
 python -m pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
   --index-url https://download.pytorch.org/whl/cu128
 python -m pip install -r environments/requirements/lerobot-model.txt -r requirements-libero.txt
-python -m pip check
 ```
 
-For training only, omit `-r requirements-libero.txt`; install it before simulator evaluation.
-
-The commands above install the CUDA 12.8 toolkit and cu128 PyTorch in this environment. Set the toolkit paths after each environment activation. Keep scheduler-provided `CUDA_VISIBLE_DEVICES` on a cluster and build on an allocated GPU:
+Build the model dependencies in the same environment:
 
 ```bash
 export CUDA_HOME="$CONDA_PREFIX"
 export PATH="$CUDA_HOME/bin:$PATH"
-nvcc --version
-python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.version.cuda == "12.8"; assert torch.cuda.is_available()'
 export FLASH_ATTN_CUDA_ARCHS=$(python -c 'import torch; print(torch.cuda.get_device_capability()[0] * 10)')
 MAX_JOBS=4 python -m pip install flash-attn==2.8.3 --no-build-isolation
 python -m pip install 'dmuon @ git+https://github.com/X-Square-Robot/dmuon.git@157f522b8570764c473b1a18939f4ebb36da5878'
 MAX_JOBS=8 python -m pip install --no-build-isolation -e .
-python -m pip check
-python -c 'import wall_x, flash_attn; from wall_x.model.core.ops import _cuda_ext_bin; print(wall_x.__file__, flash_attn.__version__)'
 ```
 
-Expected: no broken requirements; this checkout and FlashAttention 2.8.3 are printed, and the CUDA extension imports. Lower `MAX_JOBS` if compilation exhausts memory. Use separate source builds or wheels for different Torch/CUDA ABIs.
+Activate `conda activate wallx-libero` in each new terminal. The remaining steps prepare resources, train and evaluate. With a task checkpoint, complete section 2 and continue to [evaluation](#evaluate).
 
 <a id="assets"></a>
 
-## 2. Prepare model and simulator resources
+## 2. Prepare the model and simulator
 
-Download the following foundation weights and processor in the model environment to initialize training. Evaluation uses a trained task checkpoint with its saved configuration and normalizers.
+Download the Wall-OSS-0.5 foundation weights and Qwen processor:
 
 ```bash
 hf download X-Square-Robot/wall-oss-0.5 \
@@ -55,9 +49,7 @@ hf download Qwen/Qwen2.5-VL-3B-Instruct \
   --local-dir /path/to/Qwen2.5-VL-3B-Instruct
 ```
 
-Expected: Wall-OSS `config.json` and `model.safetensors`, plus the Qwen processor/tokenizer files. Set `model.config_path` to the Wall-OSS JSON and `model.processor_path` to the Qwen directory. When `checkpoint.resume_from` supplies complete Wall-OSS weights, keep `model.pretrained_path: null`.
-
-For rollout evaluation, obtain the following LIBERO source revision and its assets:
+Obtain the LIBERO source and resources for evaluation:
 
 ```bash
 mkdir -p third_party
@@ -67,11 +59,11 @@ export WALLX_LIBERO_ROOT="$PWD/third_party/LIBERO"
 python scripts/libero_resources.py
 ```
 
-Expected: `libero/libero/assets`, `bddl_files` and `init_files` are found. Obtain separately distributed assets using that LIBERO revision’s instructions. Record their provenance. Set `MUJOCO_GL=egl` for supported GPU rendering or `osmesa` for CPU rendering; policy inference still needs CUDA. The launcher preserves allocated GPU visibility unless you explicitly set `CUDA_ID`. For UUID/MIG allocations, choose a compatible EGL device or OSMesa.
+The resource tree must contain `libero/libero/assets`, `bddl_files` and `init_files`. Evaluation uses a trained task checkpoint with its training configuration and normalizers.
 
 <a id="data"></a>
 
-## 3. Prepare demonstrations and a training configuration
+## 3. Prepare data and training configuration
 
 ```bash
 hf download lerobot/libero --repo-type dataset \
@@ -81,7 +73,7 @@ mkdir -p workspace/local/libero
 cp workspace/example/libero.yml workspace/local/libero/train.yml
 ```
 
-Edit every placeholder in the copied template. Preserve its 7 physical action dimensions and virtual padding. Check camera mappings against the dataset. The following is only a path/configuration excerpt; retain the rest of the template:
+Update the paths in the copied template and retain its other settings. Fill in these fields:
 
 ```yaml
 model:
@@ -100,21 +92,19 @@ checkpoint:
   resume_from: /path/to/wall-oss-0.5/model.safetensors
 ```
 
-`repo_id` is the saved normalizer key, not a filesystem path; it must not contain a dot. `root` selects the directory and may contain dots. Keep the same key for inference. For $N$ selected episodes and training fraction $r$ (`train_test_split`), the first $\lfloor N r \rfloor$ episodes train the model; the remainder validate it.
+`repo_id` is the dataset key used by the normalizer and must not contain dots; use the same key for inference. The template uses 7-dimensional actions, two views named `observation.images.image` and `observation.images.image2`, and a 95%/5% training/validation split by episode.
 
 ```bash
 python scripts/compute_norm_stats.py --train_config workspace/local/libero/train.yml
 ```
 
-Expected: the configured statistics JSON contains `episode_split`. Only training episodes contribute statistics. Recompute these statistics after changing episode selection, order or split ratio.
+Statistics are written to `data.norm_stats_path` using only training episodes. Recompute them after changing the data or split.
 
 <a id="train"></a>
 
-## 4. Train and continue a run
+## 4. Train the model
 
-The preset uses eight GPUs × 16 samples/GPU × one accumulation step = effective batch 128, AdamW at `5e-5`, 1,000 warmup steps, a 30,000-step cosine schedule, seed 10222, horizon 10 and two 256 × 256 views. `num_training_steps` also caps the current trainer; choose the checkpoint at 25,000 updates for the [reported comparison](../README.md#libero-results). The dataset keys are `observation.images.image` and `observation.images.image2`; check `meta/info.json` before using another export.
-
-For the Qwen initialization comparison, retain `model.config_path` for architecture, set `model.pretrained_path` to the Qwen directory and `checkpoint.resume_from: null`. Use four GPUs × batch 16 × accumulation 2 to retain effective batch 128. New runs use `split_mode: episode`; the reported runs used `legacy_frame` and their original statistics.
+The template uses 8 GPUs, batch 16 per GPU and accumulation 1, giving an effective batch of 128. Adjust process count, batch size, accumulation and FSDP settings to your GPU allocation, then launch:
 
 ```bash
 torchrun --standalone --nproc_per_node=8 \
@@ -122,53 +112,33 @@ torchrun --standalone --nproc_per_node=8 \
   --config workspace/local/libero/train.yml
 ```
 
-Select process count, batch size, accumulation and FSDP settings for your GPU allocation. Logs/checkpoints use `checkpoint.save_path`. A weights file in `checkpoint.resume_from` initializes a new run. To continue, set it to a complete checkpoint directory and rerun the same command, preserving configuration, normalizers and assets. A checkpoint root may select the latest recorded step; use a concrete checkpoint for reproducible evaluation.
+Logs and checkpoints are written to `checkpoint.save_path`. To resume, set `checkpoint.resume_from` to a complete checkpoint directory, retain its configuration, normalizers and data, and rerun the command. A weights file initializes a new training run.
 
-For older runs, retain the original statistics and explicitly set `data.lerobot_config.split_mode: legacy_frame`. That mode retains the historical episode-prefix plus 95/5 frame split. Switching to `episode` requires new statistics and a new run initialized from a weight file. Resume restores recorded progress and checks the split; retain the original worker count and distributed topology for reproducibility.
+When continuing an older run, retain `data.lerobot_config.split_mode: legacy_frame`, its original statistics, worker count and distributed topology. New training uses an `episode` split with newly computed statistics.
+
+### Reproduce the README comparison
+
+Both initializations use effective batch 128, AdamW `5e-5`, 1,000 warmup steps, a 30,000-step cosine schedule, seed 10222, horizon 10 and two 256 × 256 views, evaluated at 25,000 updates. `num_training_steps` also caps training updates. The reported runs use `legacy_frame` and their original statistics.
+
+For Qwen initialization, retain `model.config_path` for the architecture, point `model.pretrained_path` to the Qwen directory, set `checkpoint.resume_from: null`, and use 4 GPUs × batch 16 per GPU × accumulation 2.
 
 <a id="evaluate"></a>
 
-## 5. Evaluate a trained checkpoint
+## 5. Evaluate the model
 
-Use a trained LIBERO checkpoint with its saved training YAML and normalizers. In the model environment, first run one episode:
-
-```bash
-export WALLX_LIBERO_ROOT=/path/to/LIBERO
-export MUJOCO_GL=egl
-source scripts/libero_rendering.sh
-python scripts/infer_libero.py --checkpoint-path /path/to/training_checkpoint \
-  --task-suite-name libero_spatial --task-indices 0 --num-trials-per-task 1 \
-  --num-workers 1 --log-dir /path/to/evaluation/single-episode
-```
-
-Then choose a smoke run (task 0, five trials, one worker) or all four standard suites:
+Activate the model environment and select a specific task checkpoint. Run the four standard suites with 50 trials per task:
 
 ```bash
-WALLX_LIBERO_ROOT=/path/to/LIBERO SMOKE=1 \
-  bash scripts/run_libero.sh /path/to/training_checkpoint
-WALLX_LIBERO_ROOT=/path/to/LIBERO ALL_SUITES=1 NUM_TRIALS_PER_TASK=50 \
-  LOG_DIR=/path/to/evaluation \
+conda activate wallx-libero
+WALLX_LIBERO_ROOT="$PWD/third_party/LIBERO" MUJOCO_GL=egl \
+  ALL_SUITES=1 NUM_TRIALS_PER_TASK=50 LOG_DIR=/path/to/evaluation \
   bash scripts/run_libero.sh /path/to/training_checkpoint
 ```
 
-Explicit CLI values override evaluation YAML; omitted options retain YAML values. Inspect a YAML launch without loading a model or simulator:
-
-```bash
-python scripts/infer_libero.py --config /path/to/eval.yml \
-  --task-suite-name libero_goal --num-trials-per-task 50 --print-config
-```
+For CPU rendering, replace `MUJOCO_GL=egl` with `MUJOCO_GL=osmesa NUMBA_DISABLE_JIT=1`; model inference still uses a GPU. The evaluation launcher retains the allocated GPUs.
 
 <a id="results"></a>
 
-## 6. Read outputs and resolve failures
+## 6. View results
 
-Each suite writes `report.json` and episode logs/recordings. The success rate is `successes / attempted`; `overall.attempted` includes execution errors, which are also counted in `overall.failed`. For comparisons, record code/weight/statistics hashes, simulator/data versions, tasks, trials, seeds, action budgets and renderer.
-
-| Symptom | Action |
-| --- | --- |
-| CUDA/compiler/extension error | Compare Torch CUDA, `nvcc` and `CUDA_HOME`; rebuild in the selected environment |
-| Missing `libGL`/EGL/OSMesa | Check installed graphics libraries and `MUJOCO_GL`; keep rendering setup before simulator imports |
-| Missing or wrong LIBERO checkout | Set `WALLX_LIBERO_ROOT`; unset stale `LIBERO_PATH`; rerun the resource check |
-| Missing normalizer or split mismatch | Use the saved logical dataset key and matching config/statistics; recompute only for a new training run |
-| Wrong checkpoint weights | Pass the concrete file; directory selection prefers `pytorch_model_fsdp.bin` before `model.safetensors` |
-| Execution failures in a report | Inspect episode errors before calculating or comparing benchmark scores |
+Results for each suite are saved under `/path/to/evaluation/<suite>/`, including `report.json`, console logs and episode records. Success rate is `successes / attempted`; `overall.attempted` includes execution errors, which also count toward `overall.failed`.

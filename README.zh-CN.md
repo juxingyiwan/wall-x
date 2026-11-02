@@ -4,15 +4,28 @@
 
 [![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
 
-**训练 Wall-X 策略，在仿真中评估，并部署到 ReBot / B601 真机。**
+基于 [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x)，提供 LIBERO、RoboTwin 2.0 的训练与评估，以及 ReBot / B601 真机部署。
 
-基于 [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x)，将 LIBERO、RoboTwin 2.0 和 ReBot 整合到同一代码库，每条使用路线配有独立环境和完整指南。
+<a id="workflows"></a>
 
-- **训练与评估**：演示数据准备、checkpoint 恢复和逐任务评估报告。
-- **真机部署**：本地或网络推理、RTC（实时动作分块）和 Rerun 可视化。
-- **动作对齐**：共享的训练/推理 padding 对齐，以及真机对比和离线消融。
+## 开始使用
 
-[开始使用](#workflows) · [真机演示](#rebot-demos) · [实验结果](#experiments) · [技术开发说明](#development)
+使用 Linux、Conda 和 NVIDIA GPU。先克隆仓库，再按所选指南安装环境：
+
+```bash
+git clone https://github.com/juxingyiwan/wall-x.git
+cd wall-x
+```
+
+| 场景 | 从安装开始 | 完整流程 |
+| --- | --- | --- |
+| LIBERO | [安装独立环境](docs/libero.zh-CN.md#environment) | 模型与模拟器 → 数据与配置 → 训练 → 评估 → 结果 |
+| RoboTwin 2.0 | [安装模型和模拟器环境](docs/robotwin.zh-CN.md#environment) | 模型与资源 → 数据与配置 → 训练 → 评估 → 结果 |
+| ReBot / B601 | [安装模型环境](docs/rebot.zh-CN.md#environment) | 模型资源 → 可选训练 → 机器人配置 → 本地或网络运行 → 结果 |
+
+三条路线使用独立环境，RoboTwin 另设模拟器环境。各指南包含固定版本下载和完整命令；已有训练 checkpoint 的用户按指南跳过训练。本仓库尚未发布实验所用的任务权重。
+
+[🎬 真机演示](#rebot-demos) · [实验结果](#experiments) · [原生 Wall-X 文档](#upstream) · [技术开发说明](#development)
 
 <a id="rebot-results"></a>
 
@@ -36,37 +49,6 @@ Wall-OSS-0.5 真机对比：**左侧开启 RTC（实时动作分块），右侧�
 | --- | --- | --- |
 | [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
 | [🎬 播放视频 · 12.0 秒](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [🎬 播放视频 · 11.4 秒](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [🎬 播放视频 · 13.4 秒](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
-
-<a id="workflows"></a>
-
-## 选择一条使用路线
-
-克隆仓库，并记录输出的提交号作为本次运行的代码版本。先按所选指南配置环境与资源，再运行首个任务。
-
-```bash
-git clone https://github.com/juxingyiwan/wall-x.git
-cd wall-x
-git rev-parse HEAD
-```
-
-| 使用目标 | 首个任务 | 完整指南 |
-| --- | --- | --- |
-| LIBERO 仿真评估或训练 | 已有训练 checkpoint 时先跑[单回合评估](docs/libero.zh-CN.md#evaluate)；训练新模型则从[演示数据与训练](docs/libero.zh-CN.md#data)开始 | [English](docs/libero.md) · [中文](docs/libero.zh-CN.md) |
-| RoboTwin 2.0 仿真评估或训练 | 从[双任务数据示例](docs/robotwin.zh-CN.md#data)开始；已有训练 checkpoint 时先跑[评估预检](docs/robotwin.zh-CN.md#evaluate) | [English](docs/robotwin.md) · [中文](docs/robotwin.zh-CN.md) |
-| ReBot / B601 真机运行 | 准备[机器人与 checkpoint 配置](docs/rebot.zh-CN.md#configuration)，先用[录制观测回放](docs/rebot.zh-CN.md#replay)验证，再进入[真机操作](docs/rebot.zh-CN.md#operate) | [English](docs/rebot.md) · [中文](docs/rebot.zh-CN.md) |
-
-开始前按下表准备资源；下载与训练命令均在对应指南中。
-
-| 资源 | 获取方式 |
-| --- | --- |
-| Wall-OSS-0.5 基础权重与 Qwen processor | 按 [LIBERO](docs/libero.zh-CN.md#assets)、[RoboTwin](docs/robotwin.zh-CN.md#assets) 或 [ReBot](docs/rebot.zh-CN.md) 指南下载固定版本 |
-| LIBERO / RoboTwin 演示数据 | 下载指南中的公开数据；RoboTwin 全量路线另含独立开发集采集步骤 |
-| ReBot 演示数据与回放观测 | 自行采集，按 [ReBot 指南](docs/rebot.zh-CN.md#data) 转换 |
-| 三条路线的任务 checkpoint | 按指南训练生成，保留配置与归一化参数；本仓库尚未发布实验所用的任务权重 |
-
-模型训练与推理使用 Linux、NVIDIA GPU、CUDA 和 Conda。各场景使用独立环境；RoboTwin 另设模拟器环境，需要 NVIDIA/Vulkan 图形支持和模拟器资源。
-
-ReBot 需要 B601 机械臂、两路相机和兼容的训练 checkpoint。GPU 可位于机器人本机或独立模型服务器。指南命令均从仓库根目录执行，并将占位路径替换为实际路径。
 
 <a id="experiments"></a>
 

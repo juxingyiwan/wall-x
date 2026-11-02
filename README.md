@@ -4,15 +4,28 @@
 
 [![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
 
-**Train Wall-X policies, evaluate them in simulation and deploy them on ReBot / B601.**
+Based on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), this repository provides LIBERO and RoboTwin 2.0 training and evaluation, plus ReBot / B601 deployment.
 
-Built on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), this repository brings LIBERO, RoboTwin 2.0 and ReBot into one codebase, with a separate environment and complete guide for each workflow.
+<a id="workflows"></a>
 
-- **Training and evaluation:** demonstration preparation, checkpoint resume and task-level evaluation reports.
-- **Real-robot deployment:** local or network inference, RTC (real-time chunking) and Rerun visualization.
-- **Action alignment:** shared training/inference padding alignment, with a robot comparison and offline ablation.
+## Get started
 
-[Get started](#workflows) · [Robot demonstrations](#rebot-demos) · [Experimental results](#experiments) · [Technical development notes](#development)
+Use Linux, Conda and an NVIDIA GPU. Clone the repository, then install the environment in your chosen guide:
+
+```bash
+git clone https://github.com/juxingyiwan/wall-x.git
+cd wall-x
+```
+
+| Workflow | Start with installation | Complete sequence |
+| --- | --- | --- |
+| LIBERO | [Install its environment](docs/libero.md#environment) | Model and simulator → Data and configuration → Training → Evaluation → Results |
+| RoboTwin 2.0 | [Install model and simulator environments](docs/robotwin.md#environment) | Model and assets → Data and configuration → Training → Evaluation → Results |
+| ReBot / B601 | [Install the model environment](docs/rebot.md#environment) | Model assets → Optional training → Robot configuration → Local or network execution → Results |
+
+Each workflow has its own environment, with a separate simulator environment for RoboTwin. The guides provide pinned downloads and complete commands; users with a trained checkpoint can skip training as directed. The task checkpoints used for the reported experiments have not been released.
+
+[🎬 Robot demos](#rebot-demos) · [Experiment results](#experiments) · [Original Wall-X docs](#upstream) · [Technical notes](#development)
 
 <a id="rebot-results"></a>
 
@@ -36,37 +49,6 @@ The silent animations show each complete demonstration at its original speed. Cl
 | --- | --- | --- |
 | [![Grasp the cube to the bowl](assets/rebot_grasp_the_cube_to_the_bowl.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [![Grasp the pen to the box](assets/rebot_grasp_the_pen_to_the_box.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [![Grasp the cube into the closed top drawer](assets/rebot_grasp_the_cube_into_the_closed_top_drawer.gif)](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
 | [🎬 Watch video · 12.0 s](https://juxingyiwan.github.io/wall-x/showcase.html#cube) | [🎬 Watch video · 11.4 s](https://juxingyiwan.github.io/wall-x/showcase.html#pen) | [🎬 Watch video · 13.4 s](https://juxingyiwan.github.io/wall-x/showcase.html#drawer) |
-
-<a id="workflows"></a>
-
-## Choose one workflow
-
-Clone the repository and record the printed commit ID for your run. Follow the selected guide's environment and resource setup before running the first task.
-
-```bash
-git clone https://github.com/juxingyiwan/wall-x.git
-cd wall-x
-git rev-parse HEAD
-```
-
-| Goal | First task | Complete guide |
-| --- | --- | --- |
-| Evaluate or train on LIBERO | With a trained checkpoint, run [one evaluation episode](docs/libero.md#evaluate); for a new model, start with [demonstrations and training](docs/libero.md#data) | [English](docs/libero.md) · [中文](docs/libero.zh-CN.md) |
-| Evaluate or train on RoboTwin 2.0 | Start with the [two-task dataset](docs/robotwin.md#data); with a trained checkpoint, run the [evaluation dry run](docs/robotwin.md#evaluate) | [English](docs/robotwin.md) · [中文](docs/robotwin.zh-CN.md) |
-| Run ReBot / B601 | Prepare the [robot and checkpoint configuration](docs/rebot.md#configuration), then [replay recorded observations](docs/rebot.md#replay) before [robot operation](docs/rebot.md#operate) | [English](docs/rebot.md) · [中文](docs/rebot.zh-CN.md) |
-
-Prepare the following resources before starting; download and training commands are in each guide.
-
-| Resource | How to obtain it |
-| --- | --- |
-| Wall-OSS-0.5 foundation weights and Qwen processor | Download the pinned versions in the [LIBERO](docs/libero.md#assets), [RoboTwin](docs/robotwin.md#assets) or [ReBot](docs/rebot.md) guide |
-| LIBERO / RoboTwin demonstrations | Download the public datasets in the guides; the RoboTwin full-data route also includes independent development-set collection |
-| ReBot demonstrations and replay observations | Collect your own and convert them with the [ReBot guide](docs/rebot.md#data) |
-| Task checkpoints for all three workflows | Train using the guides and retain configuration and normalizers; this repository has not yet published the task weights used in the experiments |
-
-Model training and inference use Linux, an NVIDIA GPU, CUDA and Conda. Each workflow has its own environment; RoboTwin uses an additional simulator environment with NVIDIA/Vulkan graphics and simulator assets.
-
-ReBot requires a B601 arm, two cameras and a compatible trained checkpoint. The GPU can run on the robot host or on a separate model server. Run guide commands from the repository root and replace placeholder paths with your own.
 
 <a id="experiments"></a>
 

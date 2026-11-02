@@ -2,53 +2,50 @@
 
 [English](rebot.md) · [总导航](../README.zh-CN.md)
 
-本页支持有人值守的一台 B601 单臂、两路相机及兼容的 Wall-X Flow checkpoint。命令在 Linux 仓库根目录执行。GPU 在实验机时使用本地推理，也可采用模型服务器加网络客户端。准备 B601 演示数据、训练 checkpoint 和机器配置。
+适用于 B601 单臂与两路相机。所有命令在 Linux 仓库根目录执行，将 `/path/to/...` 替换为实际路径。
 
 <a id="environment"></a>
 
-## 1. 安装所需环境
+## 1. 安装环境
 
-训练、服务端或本地推理使用新的模型环境。准备兼容的 NVIDIA 驱动和主机 C/C++ 工具。构建脚本要求当前 Conda 环境内部具有 `nvcc`：
+准备 Conda、NVIDIA GPU 驱动和 C/C++ 编译工具。在运行模型的 GPU 主机上安装，训练和本地推理共用此环境：
 
 ```bash
 conda env create -f environments/python310.yml -n wallx-rebot-model
 conda activate wallx-rebot-model
-conda install -c nvidia cuda-toolkit=12.8
-conda install -c conda-forge ffmpeg=8
-test -x "$CONDA_PREFIX/bin/nvcc"
-"$CONDA_PREFIX/bin/nvcc" --version
+conda install --override-channels -c nvidia -c conda-forge cuda-toolkit=12.8
+export CC=/usr/bin/gcc CXX=/usr/bin/g++
+conda install --override-channels -c conda-forge ffmpeg=8
 python -m pip install -r environments/requirements/rebot-model.txt
-python -m pip check
 export CUDA_HOME="$CONDA_PREFIX"
-python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.cuda.is_available()'
+export TORCH_CUDA_ARCH_LIST=$(python -c 'import torch; print(".".join(map(str, torch.cuda.get_device_capability())))')
 export FLASH_ATTN_CUDA_ARCHS=$(python -c 'import torch; print(torch.cuda.get_device_capability()[0] * 10)')
 MAX_JOBS=4 python -m pip install flash-attn==2.8.3 --no-build-isolation
 python -m pip install 'dmuon @ git+https://github.com/X-Square-Robot/dmuon.git@157f522b8570764c473b1a18939f4ebb36da5878'
-WALLX_BUILD_ENV=wallx-rebot-model TORCH_CUDA_ARCH_LIST='8.0;8.6' bash deployment/environment/build_wallx.sh
-python deployment/environment/validate.py --require-cuda
-python -m pip check
+WALLX_BUILD_ENV=wallx-rebot-model bash deployment/environment/build_wallx.sh
 ```
 
-上面的架构示例面向 A800 / RTX 3090，需按实际 GPU 选择。应通过 CUDA 扩展/服务检查，且 `pip check` 无冲突。依赖包含 Torch 2.10、Transformers 4.57.6、LeRobot 0.4.4、Hub 0.35.3、Rerun 0.26.2 和硬件包，不要叠加原生根 requirements。保留分配的 GPU 可见性，不同 Torch/CUDA ABI 分别构建源码。
+两个架构变量自动选择当前 GPU 的编译目标。后续打开终端先执行 `conda activate wallx-rebot-model`。
 
-仅通过网络推理时，机器人主机可使用以下独立客户端环境：
+<details>
+<summary>GPU 在另一台主机上：安装机器人客户端环境</summary>
+
+GPU 主机安装上面的模型环境；机器人主机仅需安装客户端环境。两端均使用本仓库：
 
 ```bash
 conda env create -f environments/python310.yml -n wallx-rebot-client
 conda activate wallx-rebot-client
-conda install -c conda-forge ffmpeg=8
+conda install --override-channels -c conda-forge ffmpeg=8
 python -m pip install -c environments/constraints/rebot-linux-py310-cu128.txt './deployment/client[vision,hardware]'
-python -m pip check
-python -m wallx_client doctor
 ```
 
-`doctor` 不打开设备、不加载模型。hardware extra 包含 LeRobot 及其依赖。仅在 CPU 开发机查看 CLI 时，可在 Python 3.10/3.12 环境安装 `deployment/client[dev,vision]`；操作真机时安装 hardware extra。
+</details>
 
 <a id="assets"></a>
 
 ## 2. 准备模型资源
 
-在模型环境下载以下基础权重和 processor，用于初始化训练。评估时使用已训练的任务 checkpoint 及其配置和归一化参数。
+在模型环境中下载 Wall-OSS-0.5 基础权重和 Qwen processor：
 
 ```bash
 hf download X-Square-Robot/wall-oss-0.5 \
@@ -59,90 +56,80 @@ hf download Qwen/Qwen2.5-VL-3B-Instruct \
   --local-dir /path/to/Qwen2.5-VL-3B-Instruct
 ```
 
-应得到 Wall-OSS 的 `config.json`、`model.safetensors` 和 Qwen 的 processor/tokenizer 文件。`model.config_path` 指向 Wall-OSS JSON，`model.processor_path` 指向 Qwen 目录。通过 `checkpoint.resume_from` 加载完整 Wall-OSS 权重时，保留 `model.pretrained_path: null`。
+部署需要训练好的 B601 任务 checkpoint。将完整目录放在 `<checkpoint_root>/<checkpoint_id>`，保留权重、`config.yml`、归一化参数、B601 manifest 及绑定的统计/划分文件，并确保模型和 processor 路径在推理主机上可读取。
 
-已有兼容的 B601 训练 checkpoint 时，保留它自己的配置、processor 和 normalizer，直接进入[部署配置](#configuration)。
+已有任务 checkpoint 时直接进入[部署配置](#configuration)；需要训练新任务时完成下一节。
+
+<a id="train"></a>
+
+## 3. 训练任务模型（可选）
 
 <a id="data"></a>
 
-## 3. 准备演示数据
+<details>
+<summary>准备演示数据并训练 B601 模型</summary>
 
-使用兼容的 LeRobot 数据集，包含元数据、图像/视频及 parquet 列 `episode_index`、`frame_index`、`task_index`、`timestamp`、`observation.state`、`action`。state/action 每行含 7 个有限值，每个 episode 内帧连续、时间递增、任务固定。将前方/侧面相机键映射到训练视图。在模型环境运行：
+准备含元数据及图像/视频的 LeRobot 演示数据集。parquet 包含 `episode_index`、`frame_index`、`task_index`、`timestamp`、`observation.state`、`action`；state/action 每帧各 7 个值，前/侧视图与训练配置对应。
 
 ```bash
 mkdir -p deployment/local
 test -e deployment/local/train.yml || cp workspace/example/b601.yml deployment/local/train.yml
 ```
 
-新训练模板 `workspace/example/b601.yml` 使用 8 张 GPU × 每卡 batch 8 × 累积 1，有效 batch 64；平方根任务采样、32 步关节增量动作、AdamW `5e-5`、warmup 500、更新上限 16,000。验证比例为 0.1，统计范围为 `statistics_scope: train_episodes`。此前真机验证的增量 checkpoint 使用比例 0.01 和 `statistics_scope: full_dataset`，恢复时使用 checkpoint 保存的统计量与划分。[Padding 消融](../README.zh-CN.md#action-padding)使用绝对动作 checkpoint。七个 `command_to_physical_scale` 值定义 B601 适配器的动作转换。
+修改 `deployment/local/train.yml` 中的数据集 `root`、`repo_id`、相机映射、`model.config_path`、`model.processor_path`、`checkpoint.resume_from` 和 `checkpoint.save_path`。模型配置和初始权重取自 Wall-OSS，processor 使用 Qwen；保留 `model.pretrained_path: null`。训练 YAML 中填写实际路径，不能使用 shell 变量。
 
-修改全部占位值：数据集 `root`、逻辑 `repo_id`、模型配置、processor、初始权重文件和输出目录。训练 YAML 不自动展开 shell 变量。精确恢复需保持 `data.num_workers: 0`。模板只用训练 episode 计算统计量，准备输出目录必须是新的：
-
-```bash
-python -m scripts.prepare_b601 --config deployment/local/train.yml --output-dir /path/to/new-b601-comparison
-python -m scripts.validate_b601_data --directory /path/to/new-b601-comparison
-```
-
-应生成 `absolute.yml`、`delta.yml`、独立统计量、`episode_split.json`、`preparation.json`。验证器使用真实数据/processor 检查输入与还原标签，不加载模型权重和硬件。准备工具设置 32 步 horizon 和 16,000 次更新上限，训练前核对并一致调整两组配置。绝对/增量对照使用相同划分、采样和预算。
-
-验证比例范围为 $[0, 1)$，不超过 `1e-6` 时跳过验证；否则每任务至少留出一条 episode，只有一条 episode 的任务不支持正验证比例。默认统计范围为训练 episode；`statistics_scope: full_dataset` 还会纳入留出的 episode。
-
-显式选择全数据统计时，可用下面命令冻结统计量、另行导出划分，训练前将 `data.norm_stats_path` 和 `b601.split_manifest` 指向生成文件：
+模板使用 32 步关节增量动作、训练 episode 统计量和 0.1 验证比例。填写数据和模型路径后，生成训练配置、统计量与划分文件；准备目录需为新目录：
 
 ```bash
-python -m scripts.prepare_b601 --config deployment/local/train.yml --statistics-output /path/to/frozen-statistics.json
-python -m scripts.prepare_b601 --config deployment/local/train.yml --split-output /path/to/new-episode-split.json
+python -m scripts.prepare_b601 --config deployment/local/train.yml --output-dir /path/to/new-b601-prepared
 ```
 
-<a id="train"></a>
+训练使用生成的 `delta.yml`，保留其引用的统计量和 `episode_split.json`。
 
-## 4. 训练与恢复
+### 训练与继续训练
 
 ```bash
 NPROC=8
 torchrun --nproc_per_node="$NPROC" -m scripts.train_b601 \
-  --config /path/to/new-b601-comparison/delta.yml --log_to_file
+  --config /path/to/new-b601-prepared/delta.yml --log_to_file
 ```
 
-将 `NPROC` 设为分配的 GPU 数，配套调整 batch/累积步数。使用 `scripts.train_b601` 执行 B601 数据/checkpoint 流程。日志和完整 checkpoint 写入 `checkpoint.save_path`。`max_optimizer_steps` 限制已完成的更新数，epoch 可能更早结束。
+将 `NPROC` 设为已分配的 GPU 数，并相应调整每卡 batch 和梯度累积。模板为 8 张 GPU、每卡 batch 8、累积 1，更新上限 16,000；在生成的配置中确认预算。checkpoint 保存到生成配置的 `checkpoint.save_path`。集群训练在已分配的计算节点执行。
+
+继续被中断的训练时使用完整 checkpoint：
 
 ```bash
-NPROC=8
 torchrun --nproc_per_node="$NPROC" -m scripts.train_b601 \
-  --config /path/to/new-b601-comparison/delta.yml \
-  --resume /path/to/complete-checkpoint --max-updates 18000 --log_to_file
+  --config /path/to/new-b601-prepared/delta.yml \
+  --resume /path/to/complete-checkpoint --log_to_file
 ```
 
-精确恢复需要完成标记 `b601_training_state.json`、各 rank 状态及其绑定文件。保持源码、数据、划分/统计、GPU 数、batch、随机状态、预处理、优化器、调度器不变，数据 worker 为 0。仅更新/epoch 上限可在不改变绑定轨迹的情况下延长，这不会延长余弦调度周期。使用旧权重或新实验时，在新配置将 `checkpoint.resume_from` 设为权重文件，不传 `--resume`。
+完整恢复需保留 `b601_training_state.json` 及绑定文件，沿用原数据、统计量、划分、GPU 数、batch 和优化器设置，并保持 `data.num_workers: 0`。训练完成后回到[部署配置](#configuration)，使用新 checkpoint 的身份与哈希。
+
+</details>
 
 <a id="configuration"></a>
 
-## 5. 配置机器人与 checkpoint
+## 4. 配置模型与机器人
 
-支持的控制规格为 30 Hz、两路 640 × 480 相机、32 步 × 26 维模型动作块（6 个臂关节、1 个夹爪和 19 个 padding 通道）。按硬件提供方说明配置 B601 驱动、CAN 接口和相机权限；确认标定，并与其他控制该机械臂的软件共用互斥锁文件。检查设备：
-
-```bash
-ip -details link show can0
-ls -l /dev/v4l/by-id/
-```
-
-将完整推理资源放到 `<checkpoint_root>/<checkpoint_id>`：指定权重、保存的训练配置、normalizer、模型/processor 资源，以及版本化 B601 manifest 和其绑定的划分/统计文件。优化器状态用于恢复训练，推理无需加载。计算权重哈希并创建私有配置：
+首次部署时创建以下三个配置文件；已配置的机器沿用现有文件：
 
 ```bash
-sha256sum /path/to/model.safetensors
 mkdir -p deployment/local
 test -e deployment/local/profile.yml || cp deployment/configs/b601.example.yml deployment/local/profile.yml
 test -e deployment/local/client.yml || cp deployment/configs/client.yml deployment/local/client.yml
 test -e deployment/machines/standalone.local.yml || cp deployment/machines/standalone.example.yml deployment/machines/standalone.local.yml
 ```
 
-| 文件 | 使用前设置 |
-| --- | --- |
-| `deployment/local/profile.yml` | `model.checkpoint_id`、`model.epoch`、`model.step`、真实权重 SHA256、`norm_key`、padding；`client_config: client.yml` 选择相邻私有客户端文件 |
-| `deployment/local/client.yml` | `task` 填完整训练指令，设置输出目录、控制/RTC/显示选项 |
-| `deployment/machines/standalone.local.yml` | checkpoint 根目录、真实 CAN/相机设备、已验证的相机角色及既有共享锁路径 |
+修改新建的本机配置：
 
-`checkpoint_id` 的格式为 `experiment/epoch_step`，后缀必须与 `epoch`、`step` 完全一致。例如 checkpoint 目录为 `my_experiment/3_800` 时，在完整配置的 `model` 节中同步设置：
+| 文件 | 必须填写的内容 |
+| --- | --- |
+| `deployment/local/profile.yml` | checkpoint 身份、权重 SHA256、归一化键；保留 `client_config: client.yml` 和 `padding: zero` |
+| `deployment/local/client.yml` | `task` 填完整训练指令，`output_root` 填录像与结果保存目录的绝对路径 |
+| `deployment/machines/standalone.local.yml` | `checkpoint_root`、CAN 接口、两路相机的稳定设备路径、相机角色和该机械臂既有的共享锁路径 |
+
+例如 checkpoint 目录为 `my_experiment/3_800`，在完整配置的 `model` 节修改以下字段。`epoch` 从 0 开始，`step` 与目录名称一致：
 
 ```yaml
 model:
@@ -151,113 +138,69 @@ model:
   step: 800
 ```
 
-`epoch` 从 0 开始，`step` 为正整数；沿用实际 checkpoint 的目录名称。将 `checkpoint_sha256` 替换为上面 `sha256sum` 输出的 64 位值，`norm_key` 使用该 checkpoint 保存的键。
-
-先将采集图像与训练视图核对，再设 `camera_mapping_verified: true`；相机角色使用不同的稳定设备路径。机器覆盖文件负责主机/设备设置，任务/控制/RTC 放在客户端 YAML；显式 CLI 可覆盖受支持值。检查实际生效配置：
+将下面计算的值填入 `model.checkpoint_sha256`，将 checkpoint 保存的归一化键填入 `model.norm_key`：
 
 ```bash
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml config
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml local -- config
+sha256sum /path/to/checkpoints/my_experiment/3_800/model.safetensors
 ```
 
-Rerun 实时显示默认开启；本地窗口需要解锁桌面。纯 SSH 使用 `--display-data=false`，或以 `--display-ip HOST --display-port PORT` 连接已有查看器，将它们作为客户端 `preflight`/`run` 参数传入。录像独立控制，只有 `--save-rollout=false` 才关闭。以下是重要客户端默认值，实际可由 YAML/CLI 覆盖：
-
-| 字段 | 默认值 |
-| --- | --- |
-| `policy.horizon` | `32` |
-| `policy.action_dims` | `[6, 1, 19]` |
-| `policy.padding` | `"zero"` |
-| `control.hz` | `30` |
-| `control.execution_horizon` | `16` |
-| `control.duration_s` | `300.0` |
-| `control.startup_home` | `true` |
-| `shutdown.home_timeout_s` | `65.0` |
-| `rtc.enabled` | `false` |
-| `rtc.guidance_mode` | `"lerobot"` |
-| `display_data` | `true` |
-| `save_rollout` | `true` |
-| `display_port` | `9876` |
-
-<a id="replay"></a>
-
-## 6. 采集、检查与回放
-
-采集读取 CAN 反馈和相机，不使能电机、不加载策略。首次确认角色时先核对物理设备映射与相机画面；capture 要求映射已声明验证。以下在机器人主机运行：
-
-```bash
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml client --output /path/to/new-capture capture
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml local check
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml local -- replay --observation /path/to/new-capture/observation.npz
-```
-
-应生成 `observation.npz`、相机 PNG 和采集报告，核对状态单位与相机顺序。`local check` 在不访问机器人的情况下验证/加载模型，replay 对保存观测推理。
-
-<a id="network"></a>
-
-## 7. 可选网络推理
-
-本地推理跳过本节。GPU 主机将 `deployment/machines/cluster.example.yml` 复制到新的 `deployment/machines/local.yml`；机器人主机使用 `robot.example.yml`。填写 checkpoint 路径、端点和设备，共用同一模型配置。保留分配的 `CUDA_VISIBLE_DEVICES`，不要设置冲突的 `cuda_id`。在 GPU 主机运行：
-
-```bash
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/local.yml server --dry-run
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/local.yml server
-```
-
-配置机器人客户端端点以连通服务端。远程主机使用默认回环地址时需要现场提供隧道。使用本仓库服务端，它实现了 `joint_state_v1`、模型身份/padding 校验及请求 ID。在机器人主机使用对应机器配置采集，再回放：
-
-```bash
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/local.yml client doctor
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/local.yml client --output /path/to/new-network-capture capture
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/local.yml client replay --observation /path/to/new-network-capture/observation.npz
-```
+机器人需完成标定、CAN 配置和相机访问权限设置。相机使用 640 × 480、30 Hz；将 `front_view`、`side_view` 与训练视图一一对应，确认后设置 `camera_mapping_verified: true`。模型动作规格保持 32 步、`[6, 1, 19]`，控制频率保持 30 Hz。
 
 <a id="operate"></a>
 
-## 8. 预检、同步运行与 RTC
+## 5. 运行任务
 
-清空工作区，确保物理急停可操作，由现场人员在交互终端运行。预检读取设备并调用推理，不使能电机；`run` 会使能运动，并可能在启动和结束时归位。以下只选一种后端：
+### 5.1 本地推理
+
+在机器人主机激活模型环境，连接并开启机器人和相机，在有人值守的交互终端执行。清空动作及归位路径，保持物理急停可操作。Rerun 默认开启，本地桌面需解锁。
 
 ```bash
-# Local backend
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml local -- preflight --rtc false
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml local -- run --duration 30 --rtc false
-# Network backend: robot host
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/local.yml client preflight --rtc false
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/local.yml client run --duration 30 --rtc false
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/standalone.local.yml \
+  local -- run --duration 30
 ```
 
-同步验证成功后，使用 RTC 参数重新预检，再运行。RTC 使用原生单请求 Flow 后端：
+这条命令会加载模型，自动检查相机、CAN 反馈与模型推理，通过后才使能电机、完成启动归位并执行任务。正常结束会归位并发送失能命令。等待归位完成后再开始下一轮。
+
+在 `deployment/local/client.yml` 选择任务及运行选项；RTC 设为开启后仍使用同一条启动命令：
+
+| 字段 | 默认值 | 用途 |
+| --- | --- | --- |
+| `control.duration_s` | `300.0` | 每轮时长；上面的命令用 `--duration 30` 临时改为 30 秒，去掉该参数即使用配置值 |
+| `rtc.enabled` | `false` | 同步推理；改为 `true` 开启 RTC |
+| `display_data` | `true` | 显示 Rerun；无桌面的 SSH 会话设为 `false` |
+| `save_rollout` | `true` | 保存录像；与实时显示分别控制 |
+
+终端按键：`p` 暂停/继续，`s` 标记成功并结束，`f` 标记失败并结束，`q` 或 Ctrl+C 中止。软件停止会进入收尾流程；需要立即停止运动时使用物理急停。
+
+<a id="network"></a>
+
+### 5.2 网络推理（GPU 在另一台主机上）
+
+两端使用本仓库及相同的 `deployment/local/profile.yml` 模型身份，各自保留相邻的 `client.yml`。机器人端的客户端文件决定任务、RTC 和录像。创建机器配置并填写：
+
+| 主机 | 模板 → 本机配置 | 设置 |
+| --- | --- | --- |
+| GPU 主机 | `deployment/machines/cluster.example.yml` → `deployment/machines/server.local.yml` | `checkpoint_root`；`server.host` 为机器人可访问的内网地址，`server.port` 为监听端口 |
+| 机器人主机 | `deployment/machines/robot.example.yml` → `deployment/machines/robot.local.yml` | CAN、相机、共享锁，以及指向 GPU 主机的 `client.policy.uri`，格式为 `ws://<GPU_HOST>:<PORT>` |
+
+在 GPU 主机激活模型环境并启动服务；集群上在已分配的计算节点执行，保留其 GPU 可见性：
 
 ```bash
-# Local RTC
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml local -- preflight --rtc true --guidance-mode lerobot
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml local -- run --duration 30 --rtc true --guidance-mode lerobot
-# Network RTC: robot host
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/local.yml client preflight --rtc true --guidance-mode lerobot
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/local.yml client run --duration 30 --rtc true --guidance-mode lerobot
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/server.local.yml server
 ```
 
-终端按键：`p` 暂停/继续，`s` 标记成功并结束，`f` 标记失败并结束，`q` 或 Ctrl+C 中止。示例明确设置 30 秒回合预算，包含启动后的暂停时间，不包含结束归位；通常默认值为 300 秒。软件停止可能执行受保护的归位，需要立即停止时使用物理急停。
-
-归位检查名义前向扫掠，必要时协调回收，再完成原生臂归位并验证夹爪零位。65 秒超时分别应用于各主要派发阶段。运行前检查完整归位路径中的障碍物。电机/CAN/温度故障可能阻止归位，清理仍会尝试失能；进程崩溃、断电或控制器阻塞时，使用硬件停止，并在重启前确认机器人状态。
-
-相机专项诊断不访问 CAN、策略或电机。使用未占用的输出目录，先关闭其他相机程序；它生成时序/配置报告，不保存图像或录像。
+服务就绪后，在机器人主机激活客户端环境并运行。操作按键、RTC 配置和结果位置与[本地运行](#operate)相同：
 
 ```bash
-bash wallx --config deployment/local/profile.yml --machine deployment/machines/standalone.local.yml client --output /path/to/new-camera-check camera-test --duration 60
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/robot.local.yml \
+  client run --duration 30
 ```
 
 <a id="results"></a>
 
-## 9. 查看结果与排错
+## 6. 查看结果
 
-配置的 `output_root` 保存配置、`report.json`、事件及已开启的媒体记录。`stop_outcome` 记录停止原因/人工标记，`outcome` 还包含清理故障。`shutdown.homing` 记录归位完成、失败或跳过；`shutdown.disable: commands_sent` 记录已发送失能命令，电机状态在现场确认。对于 `aborted`、`timeout`、`budget_exhausted`，根据现场观察或录像标注任务结果。
-
-| 现象 | 处理 |
-| --- | --- |
-| 占位配置或模型身份被拒绝 | 检查 checkpoint 根目录/ID、实际加载权重哈希、normalizer 键、padding 和绑定资源 |
-| 相机映射/时效失败 | 检查前/侧视图、稳定设备路径、时间戳、权限和线缆带宽；`wallx-client --help` 可查看相机诊断命令 |
-| SSH 中查看器不可用 | 传 `--display-data=false` 或配置已有查看器，录像独立控制 |
-| 服务可连接但回放失败 | 检查协议元数据和保存观测格式 |
-| RTC 被拒绝 | 核对显式 executor/RTC 配置、30 Hz 时基及服务端 guidance 能力 |
-| 归位/反馈/温度故障 | 查看停止诊断，检查物理系统并恢复健康反馈，不绕过保护 |
+每轮在 `output_root` 下创建独立目录，保存配置、`report.json`、事件和录像。`stop_outcome` 记录结束原因或人工成功/失败标记，`shutdown.homing` 记录归位结果。到时结束只代表时长用完，任务是否成功按现场观察或录像判断。

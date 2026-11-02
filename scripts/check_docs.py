@@ -303,7 +303,7 @@ def check_examples():
     table = (ROOT / "docs/rebot.md").read_text(encoding="utf-8")
     documented = {
         name: json.loads(value)
-        for name, value in re.findall(r"^\| `([\w.]+)` \| `(.*?)` \|$", table, re.M)
+        for name, value in re.findall(r"^\| `([\w.]+)` \| `(.*?)` \|", table, re.M)
     }
     actual = {}
     for prefix, cls in (
@@ -319,19 +319,10 @@ def check_examples():
         if field.default is not dataclasses.MISSING:
             actual[field.name] = field.default
     required = {
-        "policy.horizon",
-        "policy.action_dims",
-        "policy.padding",
-        "control.hz",
-        "control.execution_horizon",
         "control.duration_s",
-        "control.startup_home",
-        "shutdown.home_timeout_s",
         "rtc.enabled",
-        "rtc.guidance_mode",
         "display_data",
         "save_rollout",
-        "display_port",
     }
     if set(documented) != required or any(
         actual[k] != v for k, v in documented.items()

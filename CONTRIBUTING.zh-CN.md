@@ -4,9 +4,9 @@
 
 遵循[官方贡献原则](https://github.com/X-Square-Robot/wall-x/blob/ce2a1ae31d9ee1028b97ca40e3f66034cf8c0e5f/CONTRIBUTING.md)：改动聚焦、提供复现步骤、同步更新文档，不提交私有路径/凭证或大型 checkpoint。使用独立开发环境。
 
-<a id="checks"></a>
+<a id="environment"></a>
 
-## 1. 运行相关检查
+## 1. 安装开发环境
 
 从仓库根目录使用 Python 3.10 或 3.12，建立与 CI 对应的核心 CPU 回归环境：
 
@@ -16,19 +16,27 @@ source .venv/bin/activate
 python -m pip install 'pip>=25,<27'
 python -m pip install --no-deps torch==2.10.0+cpu torchvision==0.25.0+cpu --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -r tests/requirements-cpu.txt
+python -m pip install -e 'deployment/client[dev,vision]' pre-commit
 python -m pip check
+```
+
+<a id="checks"></a>
+
+## 2. 运行相关检查
+
+核心 CPU 回归：
+
+```bash
 CUDA_VISIBLE_DEVICES='' OMP_NUM_THREADS=2 HF_HUB_OFFLINE=1 PYTHONPATH="$PWD:$PWD/deployment/client/src" python -m pytest tests -q
 ```
 
-部署/客户端变更在独立环境安装其开发依赖后运行：
+在同一开发环境中运行部署、客户端与文档检查：
 
 ```bash
-python -m pip install -e 'deployment/client[dev,vision]'
 python -m pytest -c deployment/pyproject.toml deployment/tests -q
 python -m pytest -c deployment/client/pyproject.toml deployment/client/tests -q
 python scripts/check_docs.py
 python scripts/check_robotwin_docs.py
-python -m pip install pre-commit
 pre-commit run --all-files
 ```
 
@@ -40,7 +48,7 @@ PYTHONPATH="$PWD:$PWD/tests" torchrun --standalone --nproc_per_node=8 tests/b601
 
 <a id="validation"></a>
 
-## 2. 按变更选择验证
+## 3. 按变更选择验证
 
 | 变更 | 额外证据 |
 | --- | --- |
@@ -54,13 +62,13 @@ PYTHONPATH="$PWD:$PWD/tests" torchrun --standalone --nproc_per_node=8 tests/b601
 
 <a id="documentation"></a>
 
-## 3. 维护精简文档集合
+## 4. 维护精简文档集合
 
-维护五对中英文文档：根 README、LIBERO/RoboTwin/ReBot 使用指南和本贡献指南。两种语言的章节、命令与参数保持一致。完整使用流程放在场景指南，实现要点放在 [README 末尾的技术开发章节](README.zh-CN.md#development)，验证摘要放在 PR。官方上游文档保持原文。
+维护五对中英文文档：根 README、LIBERO/RoboTwin/ReBot 使用指南和本贡献指南。两种语言的章节、命令与参数保持一致。场景指南按安装环境、准备资源、配置、运行、查看结果排序，仅保留完成流程的必要命令；调试与回归检查放在本指南。实现要点放在 [README 末尾的技术开发章节](README.zh-CN.md#development)，验证摘要放在 PR。官方上游文档保持原文。
 
 <a id="pull-requests"></a>
 
-## 4. 准备聚焦的 PR
+## 5. 准备聚焦的 PR
 
 说明问题、最终行为与兼容性影响，标明候选版本和官方基线，解释共享核心改动，并附验证命令与结果。独立场景的改动应便于分别评审。
 
