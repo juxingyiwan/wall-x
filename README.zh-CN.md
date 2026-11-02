@@ -10,20 +10,20 @@
 
 ## 开始使用
 
-使用 Linux、Conda 和 NVIDIA GPU。先克隆仓库，再按所选指南安装环境：
+使用 Linux、Conda 和 NVIDIA GPU。先克隆仓库，再打开对应的完整使用指南：
 
 ```bash
 git clone https://github.com/juxingyiwan/wall-x.git
 cd wall-x
 ```
 
-| 场景 | 从安装开始 | 完整流程 |
-| --- | --- | --- |
-| LIBERO | [安装独立环境](docs/libero.zh-CN.md#environment) | 模型与模拟器 → 数据与配置 → 训练 → 评估 → 结果 |
-| RoboTwin 2.0 | [安装模型和模拟器环境](docs/robotwin.zh-CN.md#environment) | 模型与资源 → 数据与配置 → 训练 → 评估 → 结果 |
-| ReBot / B601 | [安装模型环境](docs/rebot.zh-CN.md#environment) | 模型资源 → 可选训练 → 机器人配置 → 本地或网络运行 → 结果 |
+| 完整使用指南 | 操作步骤（点击直达） |
+| --- | --- |
+| **[LIBERO：训练与评估](docs/libero.zh-CN.md)** | [安装环境](docs/libero.zh-CN.md#environment) → [模型与模拟器](docs/libero.zh-CN.md#assets) → [数据与配置](docs/libero.zh-CN.md#data) → [训练](docs/libero.zh-CN.md#train) → [评估](docs/libero.zh-CN.md#evaluate) → [查看结果](docs/libero.zh-CN.md#results) |
+| **[RoboTwin 2.0：训练与评估](docs/robotwin.zh-CN.md)** | [安装环境](docs/robotwin.zh-CN.md#environment) → [模型与资源](docs/robotwin.zh-CN.md#assets) → [数据准备](docs/robotwin.zh-CN.md#data) → [配置并训练](docs/robotwin.zh-CN.md#train) → [评估](docs/robotwin.zh-CN.md#evaluate) → [查看结果](docs/robotwin.zh-CN.md#results) |
+| **[ReBot / B601：训练与部署](docs/rebot.zh-CN.md)** | [安装环境](docs/rebot.zh-CN.md#environment) → [模型资源](docs/rebot.zh-CN.md#assets) → [训练（可选）](docs/rebot.zh-CN.md#train) → [机器人配置](docs/rebot.zh-CN.md#configuration) → [本地运行](docs/rebot.zh-CN.md#operate) / [网络运行](docs/rebot.zh-CN.md#network) → [查看结果](docs/rebot.zh-CN.md#results) |
 
-三条路线使用独立环境，RoboTwin 另设模拟器环境。各指南包含固定版本下载和完整命令；已有训练 checkpoint 的用户按指南跳过训练。本仓库尚未发布实验所用的任务权重。
+每份指南都包含完整流程的操作命令。首次使用请按顺序阅读；已有训练好的任务 checkpoint 时，完成环境和资源准备后，可直接进入评估或机器人配置。各场景使用独立环境，RoboTwin 另设模拟器环境。本仓库尚未发布实验所用的任务权重。
 
 [🎬 真机演示](#rebot-demos) · [实验结果](#experiments) · [原生 Wall-X 文档](#upstream) · [技术开发说明](#development)
 

@@ -10,20 +10,20 @@ Based on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), th
 
 ## Get started
 
-Use Linux, Conda and an NVIDIA GPU. Clone the repository, then install the environment in your chosen guide:
+Use Linux, Conda and an NVIDIA GPU. Clone the repository, then open the complete guide for your workflow:
 
 ```bash
 git clone https://github.com/juxingyiwan/wall-x.git
 cd wall-x
 ```
 
-| Workflow | Start with installation | Complete sequence |
-| --- | --- | --- |
-| LIBERO | [Install its environment](docs/libero.md#environment) | Model and simulator → Data and configuration → Training → Evaluation → Results |
-| RoboTwin 2.0 | [Install model and simulator environments](docs/robotwin.md#environment) | Model and assets → Data and configuration → Training → Evaluation → Results |
-| ReBot / B601 | [Install the model environment](docs/rebot.md#environment) | Model assets → Optional training → Robot configuration → Local or network execution → Results |
+| Complete usage guide | Step-by-step links |
+| --- | --- |
+| **[LIBERO: training and evaluation](docs/libero.md)** | [Install](docs/libero.md#environment) → [Model and simulator](docs/libero.md#assets) → [Data and configuration](docs/libero.md#data) → [Train](docs/libero.md#train) → [Evaluate](docs/libero.md#evaluate) → [View results](docs/libero.md#results) |
+| **[RoboTwin 2.0: training and evaluation](docs/robotwin.md)** | [Install](docs/robotwin.md#environment) → [Model and assets](docs/robotwin.md#assets) → [Data](docs/robotwin.md#data) → [Configure and train](docs/robotwin.md#train) → [Evaluate](docs/robotwin.md#evaluate) → [View results](docs/robotwin.md#results) |
+| **[ReBot / B601: training and deployment](docs/rebot.md)** | [Install](docs/rebot.md#environment) → [Model assets](docs/rebot.md#assets) → [Train (optional)](docs/rebot.md#train) → [Configure the robot](docs/rebot.md#configuration) → [Run locally](docs/rebot.md#operate) / [Run over a network](docs/rebot.md#network) → [View results](docs/rebot.md#results) |
 
-Each workflow has its own environment, with a separate simulator environment for RoboTwin. The guides provide pinned downloads and complete commands; users with a trained checkpoint can skip training as directed. The task checkpoints used for the reported experiments have not been released.
+Each guide contains the commands for the full workflow. For your first run, follow it in order. With a trained task checkpoint, complete environment and resource setup, then go directly to evaluation or robot configuration. Each workflow has its own environment, with a separate simulator environment for RoboTwin. The task checkpoints used for the reported experiments have not been released.
 
 [🎬 Robot demos](#rebot-demos) · [Experiment results](#experiments) · [Original Wall-X docs](#upstream) · [Technical notes](#development)
 
