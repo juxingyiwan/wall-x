@@ -1,10 +1,10 @@
-# Wall-X: LIBERO, RoboTwin 2.0 and ReBot
+# Wall-X: Simulation Training, Evaluation and Real-Robot Deployment
 
 [中文](README.zh-CN.md) · [🎬 Video showcase](https://juxingyiwan.github.io/wall-x/showcase.html) · [Upstream Wall-X](https://github.com/X-Square-Robot/wall-x) · [Contributing](CONTRIBUTING.md) · [All CI checks](https://github.com/juxingyiwan/wall-x/actions)
 
 [![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
 
-Based on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), this repository provides LIBERO and RoboTwin 2.0 training and evaluation, plus ReBot / B601 deployment.
+Built on [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x), this project adapts Wall-OSS-0.5 to ReBot/B601 with real-time chunking (RTC) and action-continuity improvements. It also integrates training and evaluation workflows for LIBERO and RoboTwin 2.0, with bilingual guides, deployment configurations, real-robot demonstrations, and comparative experiments.
 
 [Get started](#workflows) · [Demos](#demos) · [Experimental results](#experiments) · [Original Wall-X docs](#upstream) · [Technical notes](#development)
 

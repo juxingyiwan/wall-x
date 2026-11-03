@@ -1,10 +1,10 @@
-# Wall-X：LIBERO、RoboTwin 2.0 与 ReBot
+# Wall-X：仿真训练评估与真机部署
 
 [English](README.md) · [🎬 视频展厅](https://juxingyiwan.github.io/wall-x/showcase.html) · [上游 Wall-X](https://github.com/X-Square-Robot/wall-x) · [贡献指南](CONTRIBUTING.zh-CN.md) · [全部 CI 检查](https://github.com/juxingyiwan/wall-x/actions)
 
 [![Core CPU regressions](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/core-tests.yml) [![B601 deployment adapter](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml/badge.svg?branch=main)](https://github.com/juxingyiwan/wall-x/actions/workflows/deployment.yml)
 
-基于 [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x)，提供 LIBERO、RoboTwin 2.0 的训练与评估，以及 ReBot / B601 真机部署。
+本项目基于 [X-Square Robot / Wall-X](https://github.com/X-Square-Robot/wall-x)，为 Wall-OSS-0.5 提供 ReBot/B601 真机适配、RTC 实时动作分块和动作连续性优化，并整合 LIBERO 与 RoboTwin 2.0 的训练、评估流程。提供中英文使用指南、部署配置、真机演示和对比实验。
 
 [开始使用](#workflows) · [演示](#demos) · [实验结果](#experiments) · [原生 Wall-X 文档](#upstream) · [技术开发说明](#development)
 
