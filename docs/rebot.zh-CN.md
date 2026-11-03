@@ -150,19 +150,41 @@ sha256sum /path/to/checkpoints/my_experiment/3_800/model.safetensors
 
 ## 5. 运行任务
 
-### 5.1 本地推理
+<a id="task"></a>
+
+### 5.1 选择任务
+
+本仓库演示使用的 B601 三任务模型通过完整英文指令选择任务：
+
+| 任务 | 传给模型的完整指令 |
+| --- | --- |
+| 方块入碗 | `Grasp the cube to the bowl` |
+| 笔入盒 | `Grasp the pen to the box` |
+| 方块入抽屉 | `Grasp the cube into the closed top drawer` |
+
+下面的启动命令用 `--task` 选择方块入碗。切换任务时，将引号内的内容替换为表中对应的完整指令；`--task` 必须放在 `run` 前面。这三个任务共用同一个三任务 checkpoint，任务选择在同步与 RTC 模式下均生效。使用自行训练的模型时，填写该模型训练时使用的任务指令。
+
+如果希望固定默认任务，在 `deployment/local/client.yml` 顶层设置：
+
+```yaml
+task: "Grasp the cube to the bowl"
+```
+
+省略命令行 `--task` 时使用这个默认值；传入 `--task` 时仅覆盖本次运行，不修改配置文件。网络推理时，任务在机器人端选择。
+
+### 5.2 本地推理
 
 在机器人主机激活模型环境，连接并开启机器人和相机，在有人值守的交互终端执行。清空动作及归位路径，保持物理急停可操作。Rerun 默认开启，本地桌面需解锁。
 
 ```bash
 bash wallx --config deployment/local/profile.yml \
   --machine deployment/machines/standalone.local.yml \
-  local -- run --duration 30
+  local -- --task "Grasp the cube to the bowl" run --duration 30
 ```
 
 这条命令会加载模型，自动检查相机、CAN 反馈与模型推理，通过后才使能电机、完成启动归位并执行任务。正常结束会归位并发送失能命令。等待归位完成后再开始下一轮。
 
-在 `deployment/local/client.yml` 选择任务及运行选项；RTC 设为开启后仍使用同一条启动命令：
+在 `deployment/local/client.yml` 设置以下运行选项；RTC 设为开启后仍使用同一条任务启动命令：
 
 | 字段 | 默认值 | 用途 |
 | --- | --- | --- |
@@ -175,7 +197,7 @@ bash wallx --config deployment/local/profile.yml \
 
 <a id="network"></a>
 
-### 5.2 网络推理（GPU 在另一台主机上）
+### 5.3 网络推理（GPU 在另一台主机上）
 
 两端使用本仓库及相同的 `deployment/local/profile.yml` 模型身份，各自保留相邻的 `client.yml`。机器人端的客户端文件决定任务、RTC 和录像。创建机器配置并填写：
 
@@ -196,7 +218,7 @@ bash wallx --config deployment/local/profile.yml \
 ```bash
 bash wallx --config deployment/local/profile.yml \
   --machine deployment/machines/robot.local.yml \
-  client run --duration 30
+  client --task "Grasp the cube to the bowl" run --duration 30
 ```
 
 <a id="results"></a>

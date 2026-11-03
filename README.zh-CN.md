@@ -23,7 +23,7 @@ cd wall-x
 | --- | --- |
 | **[LIBERO：训练与评估](docs/libero.zh-CN.md)** | [安装环境](docs/libero.zh-CN.md#environment) → [模型与模拟器](docs/libero.zh-CN.md#assets) → [数据与配置](docs/libero.zh-CN.md#data) → [训练](docs/libero.zh-CN.md#train) → [评估](docs/libero.zh-CN.md#evaluate) → [查看结果](docs/libero.zh-CN.md#results) |
 | **[RoboTwin 2.0：训练与评估](docs/robotwin.zh-CN.md)** | [安装环境](docs/robotwin.zh-CN.md#environment) → [模型与资源](docs/robotwin.zh-CN.md#assets) → [数据准备](docs/robotwin.zh-CN.md#data) → [配置并训练](docs/robotwin.zh-CN.md#train) → [评估](docs/robotwin.zh-CN.md#evaluate) → [查看结果](docs/robotwin.zh-CN.md#results) |
-| **[ReBot / B601：训练与部署](docs/rebot.zh-CN.md)** | [安装环境](docs/rebot.zh-CN.md#environment) → [模型资源](docs/rebot.zh-CN.md#assets) → [训练（可选）](docs/rebot.zh-CN.md#train) → [机器人配置](docs/rebot.zh-CN.md#configuration) → [本地运行](docs/rebot.zh-CN.md#operate) / [网络运行](docs/rebot.zh-CN.md#network) → [查看结果](docs/rebot.zh-CN.md#results) |
+| **[ReBot / B601：训练与部署](docs/rebot.zh-CN.md)** | [安装环境](docs/rebot.zh-CN.md#environment) → [模型资源](docs/rebot.zh-CN.md#assets) → [训练（可选）](docs/rebot.zh-CN.md#train) → [机器人配置](docs/rebot.zh-CN.md#configuration) → [选择任务](docs/rebot.zh-CN.md#task) → [本地运行](docs/rebot.zh-CN.md#operate) / [网络运行](docs/rebot.zh-CN.md#network) → [查看结果](docs/rebot.zh-CN.md#results) |
 
 每份指南都包含完整流程的操作命令。首次使用请按顺序阅读；已有训练好的任务 checkpoint 时，完成环境和资源准备后，可直接进入评估或机器人配置。各场景使用独立环境，RoboTwin 另设模拟器环境。本仓库尚未发布实验所用的任务权重。
 

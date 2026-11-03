@@ -150,19 +150,41 @@ Complete robot calibration, CAN setup and camera permissions. Use cameras at 640
 
 ## 5. Run a task
 
-### 5.1 Local inference
+<a id="task"></a>
+
+### 5.1 Select a task
+
+The B601 three-task model used in this repository's demonstrations selects tasks through full English instructions:
+
+| Task | Full instruction sent to the model |
+| --- | --- |
+| Cube into bowl | `Grasp the cube to the bowl` |
+| Pen into box | `Grasp the pen to the box` |
+| Cube into drawer | `Grasp the cube into the closed top drawer` |
+
+The launch commands below select the cube-into-bowl task with `--task`. To switch tasks, replace the quoted text with the corresponding full instruction from the table; `--task` must appear before `run`. All three tasks share the same three-task checkpoint, and task selection works in both synchronous and RTC modes. For your own trained model, use its training task instruction.
+
+To set a persistent default, edit the top-level field in `deployment/local/client.yml`:
+
+```yaml
+task: "Grasp the cube to the bowl"
+```
+
+Omitting `--task` uses this default. Passing `--task` overrides it for the current run without changing the configuration file. For network inference, select the task on the robot host.
+
+### 5.2 Local inference
 
 Activate the model environment on the robot host, connect and power on the robot and cameras, and use an interactive terminal with an on-site operator. Clear the task and homing paths and keep the physical emergency stop accessible. Rerun is enabled by default; unlock the local desktop.
 
 ```bash
 bash wallx --config deployment/local/profile.yml \
   --machine deployment/machines/standalone.local.yml \
-  local -- run --duration 30
+  local -- --task "Grasp the cube to the bowl" run --duration 30
 ```
 
 This command loads the model and automatically checks the cameras, CAN feedback and inference before enabling the motors, homing and executing the task. Normal shutdown homes the arm and sends disable commands. Wait for homing to finish before starting another episode.
 
-Select the task and runtime options in `deployment/local/client.yml`; enabling RTC uses the same launch command:
+Set these runtime options in `deployment/local/client.yml`; enabling RTC uses the same task launch command:
 
 | Field | Default | Purpose |
 | --- | --- | --- |
@@ -175,7 +197,7 @@ Terminal keys: `p` pauses/resumes, `s` marks success and stops, `f` marks failur
 
 <a id="network"></a>
 
-### 5.2 Network inference (GPU on another host)
+### 5.3 Network inference (GPU on another host)
 
 Use this repository and the same model identity in `deployment/local/profile.yml` on both hosts, each with an adjacent `client.yml`. The robot-side client file selects the task, RTC and recording options. Create the machine configurations and fill in:
 
@@ -196,7 +218,7 @@ Once the server is ready, activate the client environment on the robot host and 
 ```bash
 bash wallx --config deployment/local/profile.yml \
   --machine deployment/machines/robot.local.yml \
-  client run --duration 30
+  client --task "Grasp the cube to the bowl" run --duration 30
 ```
 
 <a id="results"></a>
