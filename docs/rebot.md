@@ -162,7 +162,7 @@ The B601 three-task model used in this repository's demonstrations selects tasks
 | Pen into box | `Grasp the pen to the box` |
 | Cube into drawer | `Grasp the cube into the closed top drawer` |
 
-The launch commands below select the cube-into-bowl task with `--task`. To switch tasks, replace the quoted text with the corresponding full instruction from the table; `--task` must appear before `run`. All three tasks share the same three-task checkpoint, and task selection works in both synchronous and RTC modes. For your own trained model, use its training task instruction.
+Complete launch commands for each task are listed below. Run the one for your chosen task; `--task` must appear before `run`. All three tasks share the same three-task checkpoint, and task selection works in both synchronous and RTC modes. For your own trained model, use its training task instruction.
 
 To set a persistent default, edit the top-level field in `deployment/local/client.yml`:
 
@@ -176,19 +176,39 @@ Omitting `--task` uses this default. Passing `--task` overrides it for the curre
 
 Activate the model environment on the robot host, connect and power on the robot and cameras, and use an interactive terminal with an on-site operator. Clear the task and homing paths and keep the physical emergency stop accessible. Rerun is enabled by default; unlock the local desktop.
 
+Choose the task for this episode and run its command:
+
+**Cube into bowl — `Grasp the cube to the bowl`**
+
 ```bash
 bash wallx --config deployment/local/profile.yml \
   --machine deployment/machines/standalone.local.yml \
   local -- --task "Grasp the cube to the bowl" run --duration 30
 ```
 
-This command loads the model and automatically checks the cameras, CAN feedback and inference before enabling the motors, homing and executing the task. Normal shutdown homes the arm and sends disable commands. Wait for homing to finish before starting another episode.
+**Pen into box — `Grasp the pen to the box`**
+
+```bash
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/standalone.local.yml \
+  local -- --task "Grasp the pen to the box" run --duration 30
+```
+
+**Cube into drawer — `Grasp the cube into the closed top drawer`**
+
+```bash
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/standalone.local.yml \
+  local -- --task "Grasp the cube into the closed top drawer" run --duration 30
+```
+
+Each local launch command loads the model and automatically checks the cameras, CAN feedback and inference before enabling the motors, homing and executing the task. Normal shutdown homes the arm and sends disable commands. Wait for homing to finish before starting another episode.
 
 Set these runtime options in `deployment/local/client.yml`; enabling RTC uses the same task launch command:
 
 | Field | Default | Purpose |
 | --- | --- | --- |
-| `control.duration_s` | `300.0` | Episode duration; the command above temporarily selects 30 seconds with `--duration 30`. Omit that option to use the configured duration |
+| `control.duration_s` | `300.0` | Episode duration; the commands above temporarily select 30 seconds with `--duration 30`. Omit that option to use the configured duration |
 | `rtc.enabled` | `false` | Synchronous inference; set to `true` to enable RTC |
 | `display_data` | `true` | Show Rerun; set to `false` for an SSH session without a desktop |
 | `save_rollout` | `true` | Save recordings; controlled independently of the live display |
@@ -215,10 +235,30 @@ bash wallx --config deployment/local/profile.yml \
 
 Once the server is ready, activate the client environment on the robot host and run. Operator keys, RTC settings and result locations are the same as for [local operation](#operate):
 
+Choose the task for this episode and run its command:
+
+**Cube into bowl — `Grasp the cube to the bowl`**
+
 ```bash
 bash wallx --config deployment/local/profile.yml \
   --machine deployment/machines/robot.local.yml \
   client --task "Grasp the cube to the bowl" run --duration 30
+```
+
+**Pen into box — `Grasp the pen to the box`**
+
+```bash
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/robot.local.yml \
+  client --task "Grasp the pen to the box" run --duration 30
+```
+
+**Cube into drawer — `Grasp the cube into the closed top drawer`**
+
+```bash
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/robot.local.yml \
+  client --task "Grasp the cube into the closed top drawer" run --duration 30
 ```
 
 <a id="results"></a>

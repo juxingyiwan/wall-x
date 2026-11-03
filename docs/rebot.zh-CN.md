@@ -162,7 +162,7 @@ sha256sum /path/to/checkpoints/my_experiment/3_800/model.safetensors
 | 笔入盒 | `Grasp the pen to the box` |
 | 方块入抽屉 | `Grasp the cube into the closed top drawer` |
 
-下面的启动命令用 `--task` 选择方块入碗。切换任务时，将引号内的内容替换为表中对应的完整指令；`--task` 必须放在 `run` 前面。这三个任务共用同一个三任务 checkpoint，任务选择在同步与 RTC 模式下均生效。使用自行训练的模型时，填写该模型训练时使用的任务指令。
+下面按任务分别列出完整启动命令，选择目标任务对应的一条执行；`--task` 必须放在 `run` 前面。这三个任务共用同一个三任务 checkpoint，任务选择在同步与 RTC 模式下均生效。使用自行训练的模型时，填写该模型训练时使用的任务指令。
 
 如果希望固定默认任务，在 `deployment/local/client.yml` 顶层设置：
 
@@ -176,19 +176,39 @@ task: "Grasp the cube to the bowl"
 
 在机器人主机激活模型环境，连接并开启机器人和相机，在有人值守的交互终端执行。清空动作及归位路径，保持物理急停可操作。Rerun 默认开启，本地桌面需解锁。
 
+选择本轮任务，执行对应的一条命令：
+
+**方块入碗 — `Grasp the cube to the bowl`**
+
 ```bash
 bash wallx --config deployment/local/profile.yml \
   --machine deployment/machines/standalone.local.yml \
   local -- --task "Grasp the cube to the bowl" run --duration 30
 ```
 
-这条命令会加载模型，自动检查相机、CAN 反馈与模型推理，通过后才使能电机、完成启动归位并执行任务。正常结束会归位并发送失能命令。等待归位完成后再开始下一轮。
+**笔入盒 — `Grasp the pen to the box`**
+
+```bash
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/standalone.local.yml \
+  local -- --task "Grasp the pen to the box" run --duration 30
+```
+
+**方块入抽屉 — `Grasp the cube into the closed top drawer`**
+
+```bash
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/standalone.local.yml \
+  local -- --task "Grasp the cube into the closed top drawer" run --duration 30
+```
+
+每条本地启动命令都会加载模型，自动检查相机、CAN 反馈与模型推理，通过后才使能电机、完成启动归位并执行任务。正常结束会归位并发送失能命令。等待归位完成后再开始下一轮。
 
 在 `deployment/local/client.yml` 设置以下运行选项；RTC 设为开启后仍使用同一条任务启动命令：
 
 | 字段 | 默认值 | 用途 |
 | --- | --- | --- |
-| `control.duration_s` | `300.0` | 每轮时长；上面的命令用 `--duration 30` 临时改为 30 秒，去掉该参数即使用配置值 |
+| `control.duration_s` | `300.0` | 每轮时长；上述命令用 `--duration 30` 临时改为 30 秒，去掉该参数即使用配置值 |
 | `rtc.enabled` | `false` | 同步推理；改为 `true` 开启 RTC |
 | `display_data` | `true` | 显示 Rerun；无桌面的 SSH 会话设为 `false` |
 | `save_rollout` | `true` | 保存录像；与实时显示分别控制 |
@@ -215,10 +235,30 @@ bash wallx --config deployment/local/profile.yml \
 
 服务就绪后，在机器人主机激活客户端环境并运行。操作按键、RTC 配置和结果位置与[本地运行](#operate)相同：
 
+选择本轮任务，执行对应的一条命令：
+
+**方块入碗 — `Grasp the cube to the bowl`**
+
 ```bash
 bash wallx --config deployment/local/profile.yml \
   --machine deployment/machines/robot.local.yml \
   client --task "Grasp the cube to the bowl" run --duration 30
+```
+
+**笔入盒 — `Grasp the pen to the box`**
+
+```bash
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/robot.local.yml \
+  client --task "Grasp the pen to the box" run --duration 30
+```
+
+**方块入抽屉 — `Grasp the cube into the closed top drawer`**
+
+```bash
+bash wallx --config deployment/local/profile.yml \
+  --machine deployment/machines/robot.local.yml \
+  client --task "Grasp the cube into the closed top drawer" run --duration 30
 ```
 
 <a id="results"></a>
